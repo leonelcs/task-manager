@@ -1,0 +1,733 @@
+{
+  "info": {
+    "name": "ADHD Task Manager API",
+    "description": "A comprehensive collection to test the ADHD Task Manager API with collaborative features. This collection includes all endpoints for tasks, projects, groups, users, and analytics with ADHD-specific functionality.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8001",
+      "type": "string",
+      "description": "Base URL for the ADHD Task Manager API"
+    },
+    {
+      "key": "apiPrefix",
+      "value": "/api",
+      "type": "string",
+      "description": "API prefix for all endpoints"
+    }
+  ],
+  "item": [
+    {
+      "name": "🏠 Root & Health",
+      "description": "Basic application endpoints",
+      "item": [
+        {
+          "name": "Welcome Message",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            },
+            "description": "Get welcome message and API overview"
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Check API health status"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📋 Tasks",
+      "description": "ADHD-friendly task management with smart features",
+      "item": [
+        {
+          "name": "Get All Tasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "tasks"]
+            },
+            "description": "Get all tasks with ADHD-friendly filtering options"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Tasks - Filter by Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/tasks?status=todo&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "tasks"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "todo",
+                  "description": "Filter by status: todo, in_progress, completed, paused"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Limit results to prevent overwhelm"
+                }
+              ]
+            },
+            "description": "Get tasks filtered by status with ADHD-friendly limits"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Tasks - Filter by Priority",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/tasks?priority=high&task_type=routine",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "tasks"],
+              "query": [
+                {
+                  "key": "priority",
+                  "value": "high",
+                  "description": "Filter by priority: low, medium, high, urgent"
+                },
+                {
+                  "key": "task_type",
+                  "value": "routine",
+                  "description": "Filter by ADHD task type: routine, project, maintenance, emergency, hyperfocus"
+                }
+              ]
+            },
+            "description": "Get tasks filtered by priority and ADHD task type"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Specific Task",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/tasks/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "tasks", "1"]
+            },
+            "description": "Get detailed information about a specific task with ADHD features"
+          },
+          "response": []
+        },
+        {
+          "name": "Create New Task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Test Task with ADHD Features\",\n  \"description\": \"A sample task to test ADHD-specific functionality\",\n  \"priority\": \"medium\",\n  \"task_type\": \"routine\",\n  \"estimated_duration\": 30,\n  \"adhd_features\": {\n    \"dopamine_reward\": \"🎉 Great job completing this task!\",\n    \"break_reminder\": true,\n    \"chunked\": true,\n    \"energy_level_required\": \"medium\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "tasks"]
+            },
+            "description": "Create a new task with ADHD-specific features"
+          },
+          "response": []
+        },
+        {
+          "name": "Complete Task",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/tasks/1/complete",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "tasks", "1", "complete"]
+            },
+            "description": "Mark task as completed with dopamine celebration"
+          },
+          "response": []
+        },
+        {
+          "name": "Get AI Task Suggestions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/tasks/suggestions/ai",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "tasks", "suggestions", "ai"]
+            },
+            "description": "Get AI-powered task suggestions based on ADHD patterns"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "👥 Users",
+      "description": "User management with ADHD-specific profiles",
+      "item": [
+        {
+          "name": "Get User Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "users"]
+            },
+            "description": "Get user profile with ADHD preferences and statistics"
+          },
+          "response": []
+        },
+        {
+          "name": "Update ADHD Preferences",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adhd_profile\": {\n    \"energy_patterns\": {\n      \"morning\": \"high\",\n      \"afternoon\": \"medium\",\n      \"evening\": \"low\"\n    },\n    \"focus_duration\": {\n      \"optimal\": 25,\n      \"maximum\": 45,\n      \"minimum\": 10\n    },\n    \"preferences\": {\n      \"break_reminders\": true,\n      \"dopamine_rewards\": true,\n      \"task_chunking\": true,\n      \"deadline_buffers\": true,\n      \"hyperfocus_alerts\": true\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/users/preferences",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "users", "preferences"]
+            },
+            "description": "Update user's ADHD-specific preferences"
+          },
+          "response": []
+        },
+        {
+          "name": "Log Energy Level",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"energy_level\": \"high\",\n  \"duration_minutes\": 120,\n  \"notes\": \"Feeling great after morning routine and coffee\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/users/energy",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "users", "energy"]
+            },
+            "description": "Log current energy level for tracking patterns"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Energy History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/users/energy/history?days=7",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "users", "energy", "history"],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "7",
+                  "description": "Number of days to retrieve"
+                }
+              ]
+            },
+            "description": "Get energy level history for pattern analysis"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🚀 Projects",
+      "description": "Collaborative project management with ADHD support",
+      "item": [
+        {
+          "name": "Get All Projects",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "projects"]
+            },
+            "description": "Get all user projects with collaboration features"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Projects - Filter by Type",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/projects?project_type=shared&status=active",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "projects"],
+              "query": [
+                {
+                  "key": "project_type",
+                  "value": "shared",
+                  "description": "Filter by type: personal, shared, public"
+                },
+                {
+                  "key": "status",
+                  "value": "active",
+                  "description": "Filter by status: planning, active, on_hold, completed, archived"
+                }
+              ]
+            },
+            "description": "Get projects filtered by type and status"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Specific Project",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/projects/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "projects", "1"]
+            },
+            "description": "Get detailed project information with ADHD features"
+          },
+          "response": []
+        },
+        {
+          "name": "Create New Project",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ADHD-Friendly Workspace Setup\",\n  \"description\": \"Organize workspace with ADHD techniques and community support\",\n  \"project_type\": \"shared\",\n  \"adhd_features\": {\n    \"use_pomodoro_sessions\": true,\n    \"enable_group_accountability\": true,\n    \"shared_dopamine_rewards\": true,\n    \"collective_break_reminders\": true,\n    \"difficulty_balancing\": true\n  },\n  \"due_date\": \"2025-07-15T17:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "projects"]
+            },
+            "description": "Create a new project with ADHD-specific features"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Project",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Project Name\",\n  \"description\": \"Updated description with new goals\",\n  \"status\": \"active\",\n  \"adhd_features\": {\n    \"use_pomodoro_sessions\": true,\n    \"enable_group_accountability\": true,\n    \"shared_dopamine_rewards\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/projects/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "projects", "1"]
+            },
+            "description": "Update project with ADHD-friendly change management"
+          },
+          "response": []
+        },
+        {
+          "name": "Invite to Project",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_email\": \"collaborator@example.com\",\n  \"role\": \"collaborator\",\n  \"message\": \"Join our ADHD-friendly project collaboration!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/projects/1/invite",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "projects", "1", "invite"]
+            },
+            "description": "Invite user to collaborate on project"
+          },
+          "response": []
+        },
+        {
+          "name": "Join Project",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/projects/1/join",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "projects", "1", "join"]
+            },
+            "description": "Join a public project with ADHD-friendly onboarding"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Project Collaborators",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/projects/1/collaborators",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "projects", "1", "collaborators"]
+            },
+            "description": "Get project collaborators with ADHD collaboration insights"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "👫 Groups",
+      "description": "ADHD support groups and community features",
+      "item": [
+        {
+          "name": "Get All Groups",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/groups?limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "groups"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Limit results to prevent overwhelm"
+                }
+              ]
+            },
+            "description": "Get user's support groups with ADHD-friendly presentation"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Specific Group",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/groups/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "groups", "1"]
+            },
+            "description": "Get detailed group information with ADHD-specific features"
+          },
+          "response": []
+        },
+        {
+          "name": "Create New Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"ADHD Productivity Partners\",\n  \"description\": \"A supportive group for ADHD individuals focusing on productivity and accountability\",\n  \"adhd_settings\": {\n    \"group_focus_sessions\": true,\n    \"shared_energy_tracking\": true,\n    \"group_dopamine_celebrations\": true,\n    \"collaborative_task_chunking\": true,\n    \"group_break_reminders\": true,\n    \"accountability_features\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/groups",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "groups"]
+            },
+            "description": "Create a new ADHD support group"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Group",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Group Name\",\n  \"description\": \"Updated description with new focus\",\n  \"adhd_settings\": {\n    \"group_focus_sessions\": true,\n    \"shared_energy_tracking\": false,\n    \"group_dopamine_celebrations\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/groups/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "groups", "1"]
+            },
+            "description": "Update group settings with ADHD-friendly change management"
+          },
+          "response": []
+        },
+        {
+          "name": "Invite to Group",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_email\": \"newmember@example.com\",\n  \"role\": \"member\",\n  \"message\": \"Join our supportive ADHD community!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/groups/1/invite",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "groups", "1", "invite"]
+            },
+            "description": "Invite user to join ADHD support group"
+          },
+          "response": []
+        },
+        {
+          "name": "Join Group",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/groups/1/join",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "groups", "1", "join"]
+            },
+            "description": "Join group with ADHD-friendly onboarding"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Group Members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/groups/1/members",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "groups", "1", "members"]
+            },
+            "description": "Get group members with community health insights"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Group Member",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"admin\",\n  \"member_settings\": {\n    \"share_energy_patterns\": true,\n    \"receive_group_motivations\": true,\n    \"participate_in_group_focus\": true,\n    \"notification_preferences\": \"normal\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/groups/1/members/2",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "groups", "1", "members", "2"]
+            },
+            "description": "Update group member role or settings"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Group Focus Sessions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/groups/1/focus-sessions",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "groups", "1", "focus-sessions"]
+            },
+            "description": "Get group focus sessions and body doubling opportunities"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📊 Analytics",
+      "description": "ADHD-focused analytics and insights",
+      "item": [
+        {
+          "name": "Get Analytics Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/analytics/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "analytics", "dashboard"]
+            },
+            "description": "Get comprehensive ADHD analytics dashboard"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Productivity Patterns",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/analytics/productivity?period=week",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "analytics", "productivity"],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "week",
+                  "description": "Analysis period: day, week, month"
+                }
+              ]
+            },
+            "description": "Get productivity patterns and insights"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Energy Correlation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/analytics/energy-correlation",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "analytics", "energy-correlation"]
+            },
+            "description": "Get energy level correlation with productivity"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Focus Analytics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/analytics/focus?timeframe=month",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "analytics", "focus"],
+              "query": [
+                {
+                  "key": "timeframe",
+                  "value": "month",
+                  "description": "Analysis timeframe: week, month, quarter"
+                }
+              ]
+            },
+            "description": "Get focus session analytics and patterns"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Habit Formation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/analytics/habits",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "analytics", "habits"]
+            },
+            "description": "Get habit formation progress and insights"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "// Set dynamic variables if needed",
+          "// pm.globals.set('timestamp', new Date().toISOString());"
+        ],
+        "type": "text/javascript"
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "exec": [
+          "// Basic test to check if response is successful",
+          "pm.test('Status code is 200', function () {",
+          "    pm.response.to.have.status(200);",
+          "});",
+          "",
+          "// Test for JSON response",
+          "pm.test('Response is JSON', function () {",
+          "    pm.response.to.be.json;",
+          "});"
+        ],
+        "type": "text/javascript"
+      }
+    }
+  ]
+}
