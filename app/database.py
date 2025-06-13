@@ -1,19 +1,55 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import os
-from dotenv import load_dotenv
+from app.config.settings import config
+import logging
 
-load_dotenv()
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Database URL from environment variable
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./adhd_tasks.db")
+# Database engine configuration
+def create_database_engine():
+    """Create SQLAlchemy engine with appropriate configuration."""
+    
+    database_url = config.DATABASE_URL
+    logger.info(f"Connecting to database: {database_url.split('@')[0]}@***")
+    
+    # Engine arguments based on database type
+    engine_args = {
+        "pool_size": config.DB_POOL_SIZE,
+        "max_overflow": config.DB_MAX_OVERFLOW,
+        "pool_timeout": config.DB_POOL_TIMEOUT,
+        "pool_recycle": config.DB_POOL_RECYCLE,
+        "echo": config.DEBUG,  # Log SQL queries in debug mode
+    }
+    
+    # SQLite specific settings (for local development)
+    if "sqlite" in database_url:
+        engine_args["connect_args"] = {"check_same_thread": False}
+        # Remove pool settings for SQLite
+        engine_args.pop("pool_size")
+        engine_args.pop("max_overflow")
+        engine_args.pop("pool_timeout")
+        engine_args.pop("pool_recycle")
+    
+    # MySQL specific settings
+    elif "mysql" in database_url:
+        engine_args["connect_args"] = {
+            "charset": "utf8mb4",
+            "connect_timeout": 60,
+            "read_timeout": 30,
+            "write_timeout": 30,
+        }
+        
+        # Add SSL settings for production
+        if not config.DEBUG:
+            engine_args["connect_args"]["ssl_disabled"] = False
+    
+    return create_engine(database_url, **engine_args)
 
-# Create SQLAlchemy engine
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
-)
+# Create engine
+engine = create_database_engine()
 
 # Create SessionLocal class
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

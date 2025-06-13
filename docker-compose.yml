@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # MySQL Database for ADHD Task Manager
+  mysql:
+    image: mysql:8.0
+    container_name: adhdcoach-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: adhd_tasks_dev
+      MYSQL_USER: adhd_tasksmanager
+      MYSQL_PASSWORD: "My:S3cr3t"
+    ports:
+      - "30306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    networks:
+      - adhd_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      timeout: 20s
+      retries: 10
+      start_period: 40s
+      interval: 30s
+
+  # ADHD Task Manager API (optional - uncomment to run the API in Docker too)
+  # api:
+  #   build: .
+  #   container_name: adhd-task-manager-api
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - ENVIRONMENT=local
+  #     - DATABASE_URL=mysql+pymysql://adhd_tasksmanager:My%3AS3cr3t@mysql:3306/adhd_tasks_dev
+  #   depends_on:
+  #     mysql:
+  #       condition: service_healthy
+  #   networks:
+  #     - adhd_network
+  #   volumes:
+  #     - .:/app
+  #   command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+networks:
+  adhd_network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
