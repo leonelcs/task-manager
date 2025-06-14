@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import tasks, users, analytics, projects, groups
+from app.routers import tasks, users, analytics, projects, groups, auth
 from app.database import create_tables
 import os
 from dotenv import load_dotenv
@@ -61,6 +61,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])

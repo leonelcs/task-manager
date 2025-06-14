@@ -25,3 +25,4 @@ def get_config() -> BaseConfig:
 
 # Global config instance
 config = get_config()
+settings = config  # Alias for backward compatibility

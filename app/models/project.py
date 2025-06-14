@@ -115,5 +115,5 @@ class ProjectCollaboration(Base):
     
     # Relationships
     project = relationship("Project", back_populates="collaborations")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
     inviter = relationship("User", foreign_keys=[invited_by])

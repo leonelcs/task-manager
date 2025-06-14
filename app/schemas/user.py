@@ -7,7 +7,7 @@ from datetime import datetime
 
 
 class UserBase(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50, description="Username")
+    username: Optional[str] = Field(None, min_length=3, max_length=50, description="Username")
     email: EmailStr = Field(..., description="Email address")
     full_name: Optional[str] = Field(None, max_length=100, description="Full name")
 
@@ -61,6 +61,9 @@ class UserResponse(UserBase):
     updated_at: Optional[datetime]
     adhd_profile: Dict[str, Any]
     stats: Dict[str, Any]
+    google_id: Optional[str] = None
+    profile_picture_url: Optional[str] = None
+    provider: str = "local"
     
     class Config:
         from_attributes = True

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADHD Task Manager - Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+        
+        .dashboard-container {
+            background: white;
+            margin: 2rem;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: #f8f9ff;
+            border-radius: 8px;
+        }
+        
+        .user-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            margin-right: 1rem;
+            border: 3px solid #667eea;
+        }
+        
+        .user-details h2 {
+            margin: 0;
+            color: #333;
+        }
+        
+        .user-details p {
+            margin: 0.5rem 0 0 0;
+            color: #666;
+        }
+        
+        .logout-btn {
+            margin-left: auto;
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        
+        .feature-card {
+            background: #f8f9ff;
+            border: 1px solid #e6e8ff;
+            border-radius: 8px;
+            padding: 1.5rem;
+        }
+        
+        .feature-card h3 {
+            color: #667eea;
+            margin: 0 0 1rem 0;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+        
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading">
+        <h2>🧠 Loading your ADHD Task Manager dashboard...</h2>
+        <p>Hang tight while we set everything up for you! ✨</p>
+    </div>
+    
+    <div id="dashboard" class="dashboard-container" style="display: none;">
+        <div class="user-info">
+            <img id="userAvatar" class="user-avatar" src="" alt="User Avatar">
+            <div class="user-details">
+                <h2 id="userName">Welcome!</h2>
+                <p id="userEmail"></p>
+                <p id="userProvider"></p>
+            </div>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <h1>🎯 Your ADHD-Friendly Dashboard</h1>
+        
+        <div class="features">
+            <div class="feature-card">
+                <h3>📝 Smart Tasks</h3>
+                <p>Break down complex tasks into manageable chunks. Get AI-powered suggestions for optimal task scheduling based on your energy patterns.</p>
+            </div>
+            
+            <div class="feature-card">
+                <h3>⚡ Energy Tracking</h3>
+                <p>Monitor your energy levels throughout the day. The system learns when you're most productive and suggests the best times for different types of work.</p>
+            </div>
+            
+            <div class="feature-card">
+                <h3>🤝 Group Support</h3>
+                <p>Join supportive groups, participate in body doubling sessions, and celebrate achievements together with others who understand ADHD.</p>
+            </div>
+            
+            <div class="feature-card">
+                <h3>🎉 Dopamine Rewards</h3>
+                <p>Gamified experience with rewards and celebrations for completed tasks. Because every win deserves recognition!</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api';
+        
+        async function loadUserInfo() {
+            const token = localStorage.getItem('token');
+            
+            if (!token) {
+                // No token, redirect to login
+                window.location.href = 'test_login.html';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/me`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const user = await response.json();
+                    displayUserInfo(user);
+                } else {
+                    // Invalid token, redirect to login
+                    localStorage.removeItem('token');
+                    window.location.href = 'test_login.html';
+                }
+            } catch (error) {
+                console.error('Error loading user info:', error);
+                // Show error but don't redirect in case it's a network issue
+                document.getElementById('loading').innerHTML = `
+                    <div class="error">
+                        <h3>❌ Connection Error</h3>
+                        <p>Unable to connect to the server. Please check if the API is running on http://localhost:8000</p>
+                        <button onclick="location.reload()">Retry</button>
+                    </div>
+                `;
+            }
+        }
+        
+        function displayUserInfo(user) {
+            // Hide loading, show dashboard
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            
+            // Update user info
+            document.getElementById('userName').textContent = `Welcome, ${user.full_name || user.username || 'ADHD Warrior'}! 🌟`;
+            document.getElementById('userEmail').textContent = user.email;
+            document.getElementById('userProvider').textContent = user.provider === 'google' ? '🔐 Signed in with Google' : '🔐 Local account';
+            
+            // Set avatar
+            const avatar = document.getElementById('userAvatar');
+            if (user.profile_picture_url) {
+                avatar.src = user.profile_picture_url;
+                avatar.style.display = 'block';
+            } else {
+                avatar.style.display = 'none';
+            }
+        }
+        
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = 'test_login.html';
+        }
+        
+        // Load user info on page load
+        loadUserInfo();
+    </script>
+</body>
+</html>

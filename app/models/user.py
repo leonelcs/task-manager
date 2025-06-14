@@ -11,13 +11,18 @@ class User(Base):
     __tablename__ = "users"
     
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(50), unique=True, index=True, nullable=False)
+    username = Column(String(50), unique=True, index=True, nullable=True)  # Made nullable for Google OAuth
     email = Column(String(100), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(128), nullable=False)
+    hashed_password = Column(String(128), nullable=True)  # Made nullable for Google OAuth
     full_name = Column(String(100))
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # OAuth fields
+    google_id = Column(String(100), unique=True, index=True, nullable=True)
+    profile_picture_url = Column(String(500), nullable=True)
+    provider = Column(String(50), default="local")  # 'local', 'google'
     
     # ADHD-specific profile
     adhd_profile = Column(JSON, default={
@@ -56,7 +61,8 @@ class User(Base):
     # Relationships
     owned_projects = relationship("Project", back_populates="owner")
     group_memberships = relationship("GroupMembership", back_populates="user")
-    tasks = relationship("Task", back_populates="assigned_user")
+    tasks = relationship("Task", foreign_keys="Task.assigned_user_id", back_populates="assigned_user")
+    created_tasks = relationship("Task", foreign_keys="Task.created_by", back_populates="creator")
     energy_logs = relationship("EnergyLog", back_populates="user")
 
 

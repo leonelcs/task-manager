@@ -5,10 +5,12 @@ A FastAPI-based backend for a task management system specifically designed to su
 ## Features
 
 - 🧠 **ADHD-Focused Design**: Built with ADHD-specific challenges in mind
+- 🔐 **Google OAuth Authentication**: Secure login with Google accounts
 - 🤖 **Agentic Behavior**: AI-powered task suggestions based on historical data
 - 📊 **Historical Analysis**: Smart insights from past task completion patterns
 - ⚡ **FastAPI**: High-performance, modern Python web framework
 - 🔄 **Periodic Tasks**: Support for recurring tasks and routines
+- 👥 **Collaborative Features**: Group support and project collaboration
 - 📈 **Progress Tracking**: Monitor task completion and habit formation
 
 ## Project Structure
@@ -77,10 +79,17 @@ pip install -r requirements.txt
 4. Set up environment variables:
 ```bash
 cp .env.example .env
-# Edit .env with your configuration
+# Edit .env with your configuration (especially Google OAuth credentials)
 ```
 
-5. Run the application:
+5. Set up Google OAuth (see [OAuth Setup Guide](docs/GCP_OAUTH_DETAILED_SETUP.md))
+
+6. Run database migrations:
+```bash
+alembic upgrade head
+```
+
+7. Run the application:
 ```bash
 uvicorn app.main:app --reload
 ```
@@ -92,6 +101,20 @@ The API will be available at `http://localhost:8000`
 Once running, visit:
 - Interactive API docs: `http://localhost:8000/docs`
 - ReDoc documentation: `http://localhost:8000/redoc`
+- Test login page: `http://localhost:8000/examples/test_login.html`
+
+## Authentication
+
+The application supports both traditional email/password authentication and Google OAuth.
+
+### Google OAuth Setup
+For Google OAuth configuration, see the detailed guide: [OAuth Setup Guide](docs/GCP_OAUTH_DETAILED_SETUP.md)
+
+### API Endpoints
+- `GET /api/auth/google/login` - Initiate Google OAuth login
+- `POST /api/auth/login` - Traditional email/password login
+- `GET /api/auth/me` - Get current user information
+- `POST /api/auth/logout` - Logout
 
 ## ADHD-Specific Features
 

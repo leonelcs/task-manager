@@ -76,7 +76,7 @@ class Task(Base):
     focus_sessions = Column(JSON, default=[])
     
     # Relationships
-    creator = relationship("User", foreign_keys=[created_by])
+    creator = relationship("User", foreign_keys=[created_by], back_populates="created_tasks")
     assigned_user = relationship("User", foreign_keys=[assigned_user_id], back_populates="tasks")
     project = relationship("Project", back_populates="tasks")
     comments = relationship("TaskComment", back_populates="task")
