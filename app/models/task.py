@@ -32,6 +32,16 @@ class ADHDTaskType(str, enum.Enum):
     COLLABORATIVE = "collaborative"  # Team tasks
 
 
+class ADHDImpactSize(str, enum.Enum):
+    """
+    ADHD-friendly task impact classification using the Rock/Pebbles/Sand metaphor.
+    Helps with prioritization by focusing on the most impactful tasks first.
+    """
+    ROCK = "rock"           # Huge and super important - focus on these first
+    PEBBLES = "pebbles"     # Small but still important - good for momentum
+    SAND = "sand"           # Possibly delegatable, nice to have but not critical
+
+
 class Task(Base):
     __tablename__ = "tasks"
     
@@ -44,6 +54,9 @@ class Task(Base):
     priority = Column(Enum(TaskPriority), default=TaskPriority.MEDIUM)
     status = Column(Enum(TaskStatus), default=TaskStatus.TODO)
     complexity = Column(String(10), default="medium")  # low, medium, high
+    
+    # ADHD Impact Classification - Rock/Pebbles/Sand system
+    impact_size = Column(Enum(ADHDImpactSize), default=ADHDImpactSize.PEBBLES)
     
     # Ownership and assignment
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)

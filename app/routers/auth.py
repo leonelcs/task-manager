@@ -126,16 +126,10 @@ async def google_callback(
         # Create access token
         access_token = create_access_token(data={"sub": user.email, "user_id": user.id})
         
-        # For web applications, redirect to frontend with token
-        # In production, you'd use a more secure method like httpOnly cookies
-        frontend_url = f"http://localhost:3000/auth/callback?token={access_token}"
+        # Redirect to frontend with token
+        frontend_url = f"http://localhost:3000/auth/callback?token={access_token}&user_id={user.id}"
         
-        # For development/testing, we can return the token directly
-        return TokenResponse(
-            access_token=access_token,
-            token_type="bearer",
-            user=UserResponse.from_orm(user)
-        )
+        return RedirectResponse(url=frontend_url, status_code=302)
         
     except Exception as e:
         raise HTTPException(

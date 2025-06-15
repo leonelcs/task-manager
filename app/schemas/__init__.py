@@ -14,6 +14,11 @@ from .project import (
     ProjectInvitation, ProjectJoinRequest, ProjectCollaboratorInfo, 
     ProjectType, ProjectStatus
 )
+from .task import (
+    TaskBase, TaskCreate, TaskUpdate, TaskResponse, TaskListResponse,
+    TaskComplete, TaskImpactClassification, TaskSuggestion,
+    TaskPriority, TaskStatus, ADHDTaskType, ADHDImpactSize
+)
 
 __all__ = [
     # User schemas
@@ -27,5 +32,10 @@ __all__ = [
     # Project schemas
     "ProjectBase", "ProjectCreate", "ProjectUpdate", "ProjectResponse", "ProjectListResponse",
     "ProjectInvitation", "ProjectJoinRequest", "ProjectCollaboratorInfo",
-    "ProjectType", "ProjectStatus"
+    "ProjectType", "ProjectStatus",
+    
+    # Task schemas
+    "TaskBase", "TaskCreate", "TaskUpdate", "TaskResponse", "TaskListResponse",
+    "TaskComplete", "TaskImpactClassification", "TaskSuggestion", 
+    "TaskPriority", "TaskStatus", "ADHDTaskType", "ADHDImpactSize"
 ]

@@ -20,25 +20,43 @@ app = FastAPI(
     ## Features
     
     * **Smart Task Management**: Create, update, and track tasks with ADHD-specific features
+    * **🏔️ Rock/Pebbles/Sand Classification**: Prioritize by impact - Rocks (huge & important), Pebbles (meaningful progress), Sand (nice-to-have)
     * **Collaborative Projects**: Work together on shared goals with ADHD-friendly collaboration
     * **Support Groups**: Join communities for accountability and mutual support
     * **Periodic Tasks**: Support for recurring tasks and habit building
-    * **AI-Powered Insights**: Get personalized suggestions based on your patterns
-    * **Executive Function Support**: Break down complex tasks and manage priorities
-    * **Dopamine-Friendly Rewards**: Gamified experience to maintain motivation
+    * **AI-Powered Insights**: Get personalized suggestions based on your patterns and impact classification
+    * **Executive Function Support**: Break down complex tasks and manage priorities with impact awareness
+    * **Dopamine-Friendly Rewards**: Gamified experience with impact-based celebrations
     * **Energy Tracking**: Monitor and optimize your energy patterns with group insights
     
     ## ADHD-Specific Endpoints
     
     The API includes specialized endpoints for:
-    - Individual and collaborative task management
+    - Individual and collaborative task management with Rock/Pebbles/Sand classification
     - Project creation and collaboration (Personal, Shared, Public)
     - Support group management and community features
-    - Task breakdown and chunking
+    - Task breakdown and impact-aware chunking
     - Energy level tracking and sharing
     - Focus session management and body doubling
-    - Reward system integration with group celebrations
+    - Reward system integration with impact-based celebrations
     - Group accountability and motivation systems
+    
+    ## 🏔️ Rock/Pebbles/Sand System
+    
+    **Rocks**: Your biggest, most impactful tasks (1-2 per day max)
+    - Schedule during peak energy hours
+    - Major career/life impact
+    - Deserve your best focus
+    
+    **Pebbles**: Important tasks that build momentum (3-5 per day)
+    - Support your bigger goals  
+    - Great for building consistency
+    - Perfect between rocks
+    
+    **Sand**: Nice-to-have, possibly delegatable tasks
+    - Fill gaps naturally
+    - Don't let these crowd out rocks
+    - Good for low-energy periods
     """,
     version="1.0.0",
     contact={
@@ -77,15 +95,16 @@ async def read_root():
         "message": "Welcome to the ADHD Task Manager API! 🧠✨",
         "status": "running",
         "features": [
-            "Smart task management",
+            "Smart task management with Rock/Pebbles/Sand classification",
             "Collaborative projects",
             "Support groups", 
             "ADHD-specific support",
-            "AI-powered insights",
+            "AI-powered insights with impact awareness",
             "Habit tracking",
             "Dopamine rewards",
             "Community accountability"
         ],
+        "new_feature": "🏔️ Rock/Pebbles/Sand Classification - Prioritize by impact for maximum ADHD effectiveness!",
         "docs": "/docs",
         "version": "1.0.0"
     }

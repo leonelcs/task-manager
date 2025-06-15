@@ -10,6 +10,7 @@ from app.utils.helpers import (
     break_down_large_task,
     calculate_focus_score
 )
+from app.schemas.task import ADHDImpactSize
 
 
 class TaskService:
@@ -22,10 +23,10 @@ class TaskService:
         # For now, we'll use in-memory storage
         self.tasks = []
         self.task_counter = 1
-    
+
     async def create_task(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Create a new task with ADHD-friendly features.
+        Create a new task with ADHD-friendly features including impact classification.
         
         Args:
             task_data: Dictionary containing task information
@@ -47,8 +48,9 @@ class TaskService:
                 duration_info["estimated"]
             )
         
-        # Generate dopamine reward
-        reward = generate_dopamine_reward(task_data.get("task_type", "routine"))
+        # Generate dopamine reward based on impact size
+        impact_size = task_data.get("impact_size", "pebbles")
+        reward = self._generate_impact_based_reward(impact_size)
         
         new_task = {
             "id": self.task_counter,
@@ -58,6 +60,7 @@ class TaskService:
             "priority": task_data.get("priority", "medium"),
             "status": "todo",
             "complexity": task_data.get("complexity", "medium"),
+            "impact_size": impact_size,  # New field for Rock/Pebbles/Sand
             "created_at": datetime.now().isoformat(),
             "due_date": task_data.get("due_date"),
             "estimated_duration": duration_info["estimated"],
@@ -66,13 +69,11 @@ class TaskService:
                 "break_reminder": True,
                 "chunked": len(subtasks) > 1,
                 "subtasks": subtasks,
-                "energy_level_required": self._determine_energy_requirement(
-                    task_data.get("complexity", "medium"),
-                    task_data.get("task_type", "routine")
-                ),
-                "best_time_of_day": self._suggest_optimal_time(
-                    task_data.get("task_type", "routine")
-                )
+                "energy_level_required": self._determine_energy_from_impact(impact_size),
+                "best_time_of_day": self._suggest_time_by_impact(impact_size),
+                "focus_duration": self._get_focus_duration_by_impact(impact_size),
+                "hyperfocus_risk": impact_size == "rock",
+                "collaboration_boost": False
             },
             "completion_history": []
         }
@@ -81,21 +82,23 @@ class TaskService:
         self.task_counter += 1
         
         return new_task
-    
+
     async def get_tasks(
         self, 
         status: Optional[str] = None,
         priority: Optional[str] = None,
         task_type: Optional[str] = None,
+        impact_size: Optional[str] = None,  # New filter parameter
         limit: int = 50
     ) -> Dict[str, Any]:
         """
-        Get tasks with filtering and ADHD-friendly presentation.
+        Get tasks with filtering and ADHD-friendly presentation including impact classification.
         
         Args:
             status: Filter by task status
             priority: Filter by priority level
             task_type: Filter by ADHD task type
+            impact_size: Filter by Rock/Pebbles/Sand classification
             limit: Maximum number of tasks to return
             
         Returns:
@@ -110,19 +113,26 @@ class TaskService:
             filtered_tasks = [t for t in filtered_tasks if t["priority"] == priority]
         if task_type:
             filtered_tasks = [t for t in filtered_tasks if t["task_type"] == task_type]
+        if impact_size:
+            filtered_tasks = [t for t in filtered_tasks if t["impact_size"] == impact_size]
+        
+        # Sort by impact: Rocks first, then Pebbles, then Sand
+        impact_order = {"rock": 0, "pebbles": 1, "sand": 2}
+        filtered_tasks.sort(key=lambda x: impact_order.get(x.get("impact_size", "pebbles"), 1))
         
         # Limit results to prevent overwhelm
         limited_tasks = filtered_tasks[:limit]
         
-        # Add ADHD-friendly tips based on current task load
-        adhd_tip = self._get_task_load_tip(len(limited_tasks))
+        # Add ADHD-friendly tips based on current task load and impact distribution
+        adhd_tip = self._get_impact_aware_tip(limited_tasks)
         
         return {
             "tasks": limited_tasks,
             "total": len(filtered_tasks),
             "showing": len(limited_tasks),
             "adhd_tip": adhd_tip,
-            "focus_suggestion": self._get_focus_suggestion(limited_tasks)
+            "focus_suggestion": self._get_impact_based_focus_suggestion(limited_tasks),
+            "impact_distribution": self._analyze_impact_distribution(limited_tasks)
         }
     
     async def complete_task(self, task_id: int) -> Dict[str, Any]:
@@ -174,54 +184,128 @@ class TaskService:
         """Find a task by its ID."""
         return next((task for task in self.tasks if task["id"] == task_id), None)
     
-    def _determine_energy_requirement(self, complexity: str, task_type: str) -> str:
-        """Determine required energy level for a task."""
+    def _generate_impact_based_reward(self, impact_size: str) -> Dict[str, str]:
+        """Generate dopamine reward based on impact size."""
+        rewards = {
+            "rock": {
+                "message": "🏔️ MASSIVE IMPACT! You're tackling the big stuff!",
+                "emoji": "🏔️", 
+                "celebration_level": "epic"
+            },
+            "pebbles": {
+                "message": "⚡ Solid progress! Building great momentum!",
+                "emoji": "⚡",
+                "celebration_level": "high"
+            },
+            "sand": {
+                "message": "✨ Nice touch! Every detail matters!",
+                "emoji": "✨",
+                "celebration_level": "medium"
+            }
+        }
+        return rewards.get(impact_size, rewards["pebbles"])
+
+    def _determine_energy_from_impact(self, impact_size: str) -> str:
+        """Determine energy requirement based on impact size."""
         energy_map = {
-            ("low", "routine"): "low",
-            ("low", "maintenance"): "low",
-            ("medium", "routine"): "low",
-            ("medium", "maintenance"): "medium",
-            ("medium", "project"): "medium",
-            ("high", "project"): "high",
-            ("high", "emergency"): "high"
+            "rock": "high",      # Rocks need your best energy
+            "pebbles": "medium", # Pebbles are manageable
+            "sand": "low"        # Sand can be done anytime
         }
-        return energy_map.get((complexity, task_type), "medium")
-    
-    def _suggest_optimal_time(self, task_type: str) -> str:
-        """Suggest optimal time of day for task type."""
-        time_suggestions = {
-            "routine": "morning",
-            "project": "morning",
-            "maintenance": "afternoon",
-            "emergency": "anytime"
+        return energy_map.get(impact_size, "medium")
+
+    def _suggest_time_by_impact(self, impact_size: str) -> str:
+        """Suggest optimal time based on impact size."""
+        time_map = {
+            "rock": "morning",    # Rocks deserve peak hours
+            "pebbles": "flexible", # Pebbles fit anywhere
+            "sand": "afternoon"   # Sand fills the gaps
         }
-        return time_suggestions.get(task_type, "flexible")
-    
-    def _get_task_load_tip(self, task_count: int) -> str:
-        """Get ADHD tip based on current task load."""
-        if task_count == 0:
-            return "🎉 All caught up! Perfect time to plan or take a well-deserved break."
-        elif task_count <= 3:
-            return "👌 Great task load! Focus on one at a time for maximum effectiveness."
-        elif task_count <= 7:
-            return "⚡ Moderate task load. Consider prioritizing the top 3 for today."
+        return time_map.get(impact_size, "flexible")
+
+    def _get_focus_duration_by_impact(self, impact_size: str) -> int:
+        """Get recommended focus duration based on impact size."""
+        duration_map = {
+            "rock": 45,      # Rocks might need longer focus sessions
+            "pebbles": 25,   # Standard pomodoro for pebbles
+            "sand": 15       # Quick bursts for sand tasks
+        }
+        return duration_map.get(impact_size, 25)
+
+    def _get_impact_aware_tip(self, tasks: List[Dict[str, Any]]) -> str:
+        """Get ADHD tip based on task impact distribution."""
+        if not tasks:
+            return "🎉 All caught up! Perfect time to plan your next rocks and pebbles."
+        
+        rock_count = sum(1 for t in tasks if t.get("impact_size") == "rock")
+        pebbles_count = sum(1 for t in tasks if t.get("impact_size") == "pebbles")
+        sand_count = sum(1 for t in tasks if t.get("impact_size") == "sand")
+        
+        if rock_count > 2:
+            return "🏔️ You have many ROCK tasks! Focus on just 1-2 rocks per day for maximum impact."
+        elif rock_count >= 1 and pebbles_count >= 1:
+            return "⚡ Perfect mix! Start with a rock during peak energy, then build momentum with pebbles."
+        elif pebbles_count > 5:
+            return "🔄 Lots of pebbles! Group similar ones together for efficient momentum building."
+        elif sand_count > 10:
+            return "🌊 High sand volume detected! Consider delegating or batching these tasks."
         else:
-            return "🧠 High task load detected. Break it down - focus on just 2-3 priorities today."
-    
-    def _get_focus_suggestion(self, tasks: List[Dict[str, Any]]) -> str:
-        """Get focus suggestion based on available tasks."""
+            return "👌 Great task balance! Focus on impact order: rocks first, then pebbles, sand fills gaps."
+
+    def _get_impact_based_focus_suggestion(self, tasks: List[Dict[str, Any]]) -> str:
+        """Get focus suggestion based on available tasks and their impact."""
         if not tasks:
             return "Time to add some tasks or enjoy the moment! 🌟"
         
-        high_priority = [t for t in tasks if t["priority"] == "high"]
-        if high_priority:
-            return f"🎯 Focus suggestion: Start with '{high_priority[0]['title']}' - it's high priority!"
+        # Find the highest impact task available
+        rock_tasks = [t for t in tasks if t.get("impact_size") == "rock" and t["status"] == "todo"]
+        pebbles_tasks = [t for t in tasks if t.get("impact_size") == "pebbles" and t["status"] == "todo"] 
         
-        quick_tasks = [t for t in tasks if t["estimated_duration"] <= 15]
-        if quick_tasks:
-            return f"⚡ Quick win available: '{quick_tasks[0]['title']}' takes only {quick_tasks[0]['estimated_duration']} minutes!"
+        if rock_tasks:
+            return f"🏔️ ROCK FOCUS: Start with '{rock_tasks[0]['title']}' - this will have massive impact!"
+        elif pebbles_tasks:
+            return f"⚡ PEBBLES MOMENTUM: '{pebbles_tasks[0]['title']}' is perfect for building progress!"
+        else:
+            sand_tasks = [t for t in tasks if t.get("impact_size") == "sand" and t["status"] == "todo"]
+            if sand_tasks:
+                return f"✨ SAND SWEEP: '{sand_tasks[0]['title']}' - a nice task to fill some time!"
+            else:
+                return "🚀 All tasks in progress! Great job staying on track!"
+
+    def _analyze_impact_distribution(self, tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Analyze the distribution of tasks by impact size."""
+        rock_count = sum(1 for t in tasks if t.get("impact_size") == "rock")
+        pebbles_count = sum(1 for t in tasks if t.get("impact_size") == "pebbles")
+        sand_count = sum(1 for t in tasks if t.get("impact_size") == "sand")
         
-        return f"🚀 Good time to tackle '{tasks[0]['title']}' - you've got this!"
+        total = len(tasks)
+        if total == 0:
+            return {"rock": 0, "pebbles": 0, "sand": 0, "balance_assessment": "No tasks available"}
+        
+        rock_percentage = (rock_count / total) * 100
+        pebbles_percentage = (pebbles_count / total) * 100
+        sand_percentage = (sand_count / total) * 100
+        
+        # Assess balance (ideal: 10-20% rocks, 60-70% pebbles, 10-30% sand)
+        balance_assessment = "Good balance"
+        if rock_percentage > 30:
+            balance_assessment = "Too many rocks - consider breaking some down"
+        elif rock_percentage == 0 and total > 0:
+            balance_assessment = "No rocks found - add some high-impact tasks"
+        elif sand_percentage > 50:
+            balance_assessment = "Too much sand - focus on higher impact tasks"
+        
+        return {
+            "rock": rock_count,
+            "pebbles": pebbles_count, 
+            "sand": sand_count,
+            "percentages": {
+                "rock": round(rock_percentage, 1),
+                "pebbles": round(pebbles_percentage, 1),
+                "sand": round(sand_percentage, 1)
+            },
+            "balance_assessment": balance_assessment
+        }
     
     def _calculate_completion_streak(self, task: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate completion streak for the task type."""

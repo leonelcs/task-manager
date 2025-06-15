@@ -10,19 +10,190 @@ import random
 
 class ADHDAIService:
     """
-    AI service specifically designed for ADHD task management.
-    
-    This service provides:
-    - Intelligent task suggestions based on energy levels
-    - Pattern recognition from historical data
-    - Personalized recommendations
-    - Adaptive difficulty adjustments
+    AI service for ADHD-specific task management with Rock/Pebbles/Sand awareness.
     """
     
     def __init__(self):
         self.user_patterns = {}
         self.task_history = []
-    
+
+    async def get_impact_aware_suggestions(
+        self,
+        current_energy: str = "medium",
+        available_time: int = 30,
+        current_time_of_day: str = "afternoon",
+        user_preferences: Dict[str, Any] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get task suggestions based on Rock/Pebbles/Sand classification and current context.
+        
+        Args:
+            current_energy: User's current energy level
+            available_time: Available time in minutes
+            current_time_of_day: Current time of day
+            user_preferences: User's ADHD preferences
+            
+        Returns:
+            List of task suggestions with impact classification
+        """
+        suggestions = []
+        
+        # Rock suggestions - for high energy and good time blocks
+        if current_energy == "high" and available_time >= 60:
+            rock_suggestions = [
+                {
+                    "task_type": "rock",
+                    "title": "Work on your most important project milestone",
+                    "description": "Tackle the big, high-impact task that will move your major goals forward",
+                    "reasoning": f"🏔️ ROCK TIME! High energy ({current_energy}) + good time block ({available_time}min) = perfect for your most impactful work",
+                    "confidence": 0.9,
+                    "estimated_duration": min(available_time, 90),
+                    "adhd_benefits": [
+                        "Maximum impact on your goals",
+                        "Uses your peak energy wisely", 
+                        "Major dopamine payoff when completed",
+                        "Moves the needle on important outcomes"
+                    ],
+                    "energy_match": "perfect",
+                    "time_match": "excellent"
+                }
+            ]
+            suggestions.extend(rock_suggestions)
+        
+        # Pebbles suggestions - for medium energy or when building momentum
+        if current_energy in ["medium", "high"] and available_time >= 15:
+            pebbles_suggestions = [
+                {
+                    "task_type": "pebbles", 
+                    "title": "Complete an important routine or follow-up task",
+                    "description": "Handle meaningful tasks that support your bigger goals and build momentum",
+                    "reasoning": f"⚡ PEBBLES PERFECT! Your energy ({current_energy}) and time ({available_time}min) are ideal for solid progress",
+                    "confidence": 0.85,
+                    "estimated_duration": min(available_time, 45),
+                    "adhd_benefits": [
+                        "Builds productive momentum",
+                        "Solid sense of accomplishment", 
+                        "Supports your bigger goals",
+                        "Good dopamine hit without overwhelm"
+                    ],
+                    "energy_match": "good",
+                    "time_match": "good"
+                }
+            ]
+            suggestions.extend(pebbles_suggestions)
+        
+        # Sand suggestions - for low energy, short time, or filling gaps
+        if available_time <= 20 or current_energy == "low":
+            sand_suggestions = [
+                {
+                    "task_type": "sand",
+                    "title": "Handle quick organizational or administrative tasks", 
+                    "description": "Take care of small, low-pressure tasks that still feel productive",
+                    "reasoning": f"✨ SAND SWEEP! Low pressure tasks perfect for your current state - {current_energy} energy, {available_time}min available",
+                    "confidence": 0.75,
+                    "estimated_duration": min(available_time, 15),
+                    "adhd_benefits": [
+                        "Low mental load",
+                        "Easy sense of completion",
+                        "Fills time productively", 
+                        "No pressure or overwhelm"
+                    ],
+                    "energy_match": "perfect",
+                    "time_match": "perfect"
+                }
+            ]
+            suggestions.extend(sand_suggestions)
+        
+        # Time-of-day specific suggestions
+        if current_time_of_day == "morning" and current_energy == "high":
+            suggestions.insert(0, {
+                "task_type": "rock",
+                "title": "Your #1 priority task for today",
+                "description": "This is prime time - tackle your most important, high-impact work",
+                "reasoning": "🌅 GOLDEN HOUR! Morning + high energy = rock task time. This is when magic happens!",
+                "confidence": 0.95,
+                "estimated_duration": min(available_time, 120),
+                "adhd_benefits": [
+                    "Peak brain performance",
+                    "Maximum focus capacity",
+                    "Sets positive tone for whole day",
+                    "Highest impact potential"
+                ],
+                "energy_match": "perfect",
+                "time_match": "optimal"
+            })
+        
+        # Fallback for any situation
+        if not suggestions:
+            suggestions.append({
+                "task_type": "sand",
+                "title": "Take a mindful 5-minute reset break",
+                "description": "Sometimes the best 'task' is giving your brain a moment to recharge",
+                "reasoning": "🧠 BRAIN CARE! Taking a break is productive too - it improves your next task performance",
+                "confidence": 0.8,
+                "estimated_duration": 5,
+                "adhd_benefits": [
+                    "Mental reset and clarity",
+                    "Prevents burnout",
+                    "Improves focus for next task",
+                    "Self-care is productive"
+                ],
+                "energy_match": "restorative", 
+                "time_match": "flexible"
+            })
+        
+        return suggestions[:3]  # Return top 3 suggestions
+
+    async def analyze_impact_patterns(self, user_id: int, tasks_history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Analyze user's task completion patterns specifically for Rock/Pebbles/Sand distribution.
+        
+        Args:
+            user_id: User identifier
+            tasks_history: Historical task data
+            
+        Returns:
+            Analysis with Rock/Pebbles/Sand insights
+        """
+        # Mock analysis - in reality this would query actual user data
+        return {
+            "impact_distribution_analysis": {
+                "current_balance": {
+                    "rocks_percentage": 15,  # Good - not too many
+                    "pebbles_percentage": 65,  # Perfect - majority
+                    "sand_percentage": 20   # Good - manageable amount
+                },
+                "completion_rates_by_impact": {
+                    "rock": 78,      # Rock tasks get done less often but have huge impact
+                    "pebbles": 89,   # Pebbles have highest completion rate
+                    "sand": 67       # Sand tasks often get delayed
+                },
+                "optimal_daily_distribution": {
+                    "rocks": "1-2 maximum",
+                    "pebbles": "3-5 for momentum", 
+                    "sand": "Fill gaps naturally"
+                }
+            },
+            "energy_impact_correlation": {
+                "best_time_for_rocks": "8:00-10:00 AM (peak energy)",
+                "pebbles_sweet_spot": "Throughout day between rocks",
+                "sand_filler_times": "Low energy periods, transition times"
+            },
+            "recommendations": [
+                "🏔️ Schedule your 1-2 rock tasks during peak energy hours",
+                "⚡ Use pebbles tasks to build momentum between big tasks",
+                "✨ Let sand tasks fill natural gaps - don't schedule them first",
+                "🎯 When overwhelmed, focus only on rocks and pebbles",
+                "💡 Break large rocks into smaller rocks or pebbles"
+            ],
+            "adhd_insights": {
+                "hyperfocus_tendency": "Moderate risk with rock tasks",
+                "optimal_task_switching": "Rock → Break → Pebbles → Sand",
+                "procrastination_pattern": "Tends to delay rocks when overwhelmed",
+                "momentum_builder": "Completing pebbles increases rock completion rate by 40%"
+            }
+        }
+
     async def get_task_suggestions(
         self, 
         current_energy: str = "medium",
