@@ -1,11 +1,19 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
+from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime, timedelta
+from app.database import get_db
+from app.models.user import User
+from app.models.task import Task
+from app.routers.auth import get_current_user
 
 router = APIRouter()
 
 @router.get("/dashboard", summary="Get ADHD analytics dashboard")
-async def get_dashboard():
+async def get_dashboard(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Get comprehensive analytics dashboard with ADHD-focused insights.
     
@@ -16,20 +24,51 @@ async def get_dashboard():
     - Habit formation tracking
     - Dopamine reward effectiveness
     """
+    # Get user's task statistics from database
+    today = datetime.now().date()
+    week_start = today - timedelta(days=today.weekday())
+    
+    # Today's stats
+    tasks_completed_today = db.query(Task).filter(
+        Task.created_by == current_user.id,
+        Task.status == 'COMPLETED',
+        Task.completed_at >= today
+    ).count()
+    
+    tasks_pending_today = db.query(Task).filter(
+        Task.created_by == current_user.id,
+        Task.status.in_(['TODO', 'IN_PROGRESS']),
+        Task.due_date >= today
+    ).count()
+    
+    # Week stats
+    tasks_completed_week = db.query(Task).filter(
+        Task.created_by == current_user.id,
+        Task.status == 'COMPLETED',
+        Task.completed_at >= week_start
+    ).count()
+    
+    total_tasks_week = db.query(Task).filter(
+        Task.created_by == current_user.id,
+        Task.created_at >= week_start
+    ).count()
+    
+    average_completion_rate = (tasks_completed_week / total_tasks_week * 100) if total_tasks_week > 0 else 0
+    
     return {
         "overview": {
             "today": {
-                "tasks_completed": 3,
-                "tasks_pending": 2,
-                "energy_level": "medium",
-                "focus_sessions": 2,
-                "break_compliance": 85  # percentage
+                "tasks_completed": tasks_completed_today,
+                "tasks_pending": tasks_pending_today,
+                "energy_level": "medium",  # Could be derived from energy logs
+                "focus_sessions": 0,  # Could be tracked in future
+                "break_compliance": 85  # Could be calculated from session data
             },
             "this_week": {
-                "tasks_completed": 18,
-                "average_completion_rate": 72,
-                "best_day": "Tuesday",
-                "productivity_trend": "improving"
+                "tasks_completed": tasks_completed_week,
+                "average_completion_rate": round(average_completion_rate),
+                "best_day": "Tuesday",  # Could be calculated from historical data
+                "productivity_trend": "improving"  # Could be derived from trends
             }
         },
         "adhd_insights": {
@@ -47,10 +86,10 @@ async def get_dashboard():
             ]
         },
         "dopamine_stats": {
-            "rewards_earned_today": 5,
-            "streak_bonus": 3,
-            "celebration_moments": 8,
-            "motivation_level": "high"
+            "rewards_earned_today": 0,  # Could be tracked
+            "streak_bonus": 0,
+            "celebration_moments": 0,
+            "motivation_level": "medium"
         }
     }
 
@@ -110,7 +149,10 @@ async def get_patterns(
     }
 
 @router.get("/progress", summary="Get progress tracking")
-async def get_progress():
+async def get_progress(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Get detailed progress tracking with ADHD-friendly metrics.
     
@@ -121,50 +163,63 @@ async def get_progress():
     - Goal achievement
     - Personal growth indicators
     """
+    # Get user's task completion stats
+    total_completed = db.query(Task).filter(
+        Task.created_by == current_user.id,
+        Task.status == 'COMPLETED'
+    ).count()
+    
+    # Get recent completion data for streaks
+    today = datetime.now().date()
+    recent_tasks = db.query(Task).filter(
+        Task.created_by == current_user.id,
+        Task.status == 'COMPLETED',
+        Task.completed_at >= today - timedelta(days=30)
+    ).order_by(Task.completed_at.desc()).all()
+    
     return {
         "habit_tracking": {
             "morning_routine": {
-                "current_streak": 5,
-                "longest_streak": 12,
-                "completion_rate": 78,
-                "trend": "improving"
+                "current_streak": 0,  # Could be calculated from task patterns
+                "longest_streak": 0,
+                "completion_rate": 0,
+                "trend": "stable"
             },
             "task_planning": {
-                "current_streak": 3,
-                "longest_streak": 8,
-                "completion_rate": 65,
+                "current_streak": 0,
+                "longest_streak": 0,
+                "completion_rate": 0,
                 "trend": "stable"
             },
             "break_taking": {
-                "current_streak": 7,
-                "longest_streak": 15,
-                "completion_rate": 85,
-                "trend": "excellent"
+                "current_streak": 0,
+                "longest_streak": 0,
+                "completion_rate": 0,
+                "trend": "stable"
             }
         },
-        "achievements": [
-            {"title": "Morning Warrior", "description": "5-day morning routine streak", "earned": "2025-06-11"},
-            {"title": "Break Master", "description": "Taking breaks 85% of the time", "earned": "2025-06-10"},
-            {"title": "Task Crusher", "description": "Completed 3 tasks today", "earned": "2025-06-11"}
-        ],
+        "achievements": [],  # Could be calculated based on milestones
         "growth_indicators": {
             "executive_function": {
-                "planning": 7.5,  # out of 10
-                "organization": 6.8,
-                "time_management": 7.2,
-                "task_initiation": 6.5
+                "planning": 7.0,  # Could be derived from task patterns
+                "organization": 6.5,
+                "time_management": 7.0,
+                "task_initiation": 6.0
             },
             "improvement_areas": [
-                "Task initiation could improve with better energy matching",
-                "Organization benefits from consistent daily tidying",
-                "Time management is strong with break reminders"
+                "Keep building momentum with consistent task completion",
+                "Consider tracking energy patterns for better task scheduling",
+                "Celebrate progress to maintain motivation"
             ]
         },
-        "celebration": "🎉 You've completed 147 tasks total! That's incredible progress! 🚀"
+        "celebration": f"🎉 You've completed {total_completed} tasks total! Keep up the great work! 🚀"
     }
 
 @router.get("/focus-sessions", summary="Get focus session analytics")
-async def get_focus_sessions():
+async def get_focus_sessions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Get detailed analytics about focus sessions and deep work periods.
     
@@ -174,27 +229,12 @@ async def get_focus_sessions():
     - Hyperfocus pattern recognition
     - Attention span trends
     """
+    # For now, return structure indicating no focus sessions are tracked yet
+    # In the future, this would query a focus_sessions table
     return {
-        "recent_sessions": [
-            {
-                "date": "2025-06-11",
-                "start_time": "09:00",
-                "duration": 25,
-                "task_type": "routine",
-                "effectiveness": 9,
-                "break_taken": True
-            },
-            {
-                "date": "2025-06-11",
-                "start_time": "10:30",
-                "duration": 45,
-                "task_type": "project",
-                "effectiveness": 7,
-                "break_taken": True
-            }
-        ],
+        "recent_sessions": [],
         "session_analytics": {
-            "optimal_duration": 28,  # minutes
+            "optimal_duration": 25,  # Default ADHD-friendly duration
             "success_rate_by_duration": {
                 "15_min": 95,
                 "25_min": 90,
@@ -208,9 +248,9 @@ async def get_focus_sessions():
             }
         },
         "insights": [
-            "🎯 Your sweet spot is 25-30 minute focus sessions",
-            "🔄 10-minute breaks give you the best recovery",
-            "⚡ Morning sessions are 35% more effective",
-            "📈 Your focus stamina is improving over time!"
+            "🎯 25-minute sessions are optimal for ADHD focus",
+            "🔄 10-minute breaks provide the best recovery",
+            "⚡ Morning sessions tend to be most effective",
+            "📈 Regular practice improves focus stamina over time!"
         ]
     }

@@ -3,13 +3,35 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import tasks, users, analytics, projects, groups, auth
 from app.database import create_tables
 import os
+import logging
 from dotenv import load_dotenv
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('adhd_task_manager.log'),
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
 
+logger.info("🚀 ADHD Task Manager API Starting Up...")
+logger.info("🌍 Loading environment variables...")
+
 # Initialize database tables on startup
-create_tables()
+logger.info("🗄️ Creating database tables...")
+try:
+    create_tables()
+    logger.info("✅ Database tables created successfully")
+except Exception as e:
+    logger.error(f"❌ Failed to create database tables: {str(e)}")
+    raise
 
 # Create FastAPI app with ADHD-focused metadata
 app = FastAPI(
@@ -77,6 +99,42 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add request/response logging middleware
+from fastapi import Request, Response
+import time
+import json
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all HTTP requests and responses for debugging"""
+    start_time = time.time()
+    
+    # Log request details
+    logger.info("📤 " + "="*50)
+    logger.info(f"📤 {request.method} {request.url}")
+    logger.info(f"📤 Headers: {dict(request.headers)}")
+    logger.info(f"📤 Client: {request.client}")
+    
+    # Log request body for POST/PUT requests
+    if request.method in ["POST", "PUT", "PATCH"]:
+        try:
+            body = await request.body()
+            if body:
+                logger.info(f"📤 Body: {body.decode('utf-8')[:500]}...")
+        except Exception as e:
+            logger.error(f"📤 Could not read request body: {e}")
+    
+    # Process request
+    response = await call_next(request)
+    
+    # Log response details
+    process_time = time.time() - start_time
+    logger.info(f"📥 Response: {response.status_code}")
+    logger.info(f"📥 Time: {process_time:.3f}s")
+    logger.info("📥 " + "="*50)
+    
+    return response
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])

@@ -63,10 +63,17 @@ def get_db():
     Dependency function to get database session.
     This will be used in FastAPI route dependencies.
     """
+    logger.info("🗄️ Creating new database session")
     db = SessionLocal()
     try:
+        logger.info("✅ Database session created successfully")
         yield db
+    except Exception as e:
+        logger.error(f"❌ Database session error: {str(e)}")
+        db.rollback()
+        raise
     finally:
+        logger.info("🔒 Closing database session")
         db.close()
 
 # Create tables

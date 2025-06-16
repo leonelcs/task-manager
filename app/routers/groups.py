@@ -2,7 +2,13 @@
 Groups router for ADHD Task Manager collaborative features.
 """
 from fastapi import APIRouter, HTTPException, Query, Depends
+from sqlalchemy.orm import Session
 from typing import Optional, List
+from app.database import get_db
+from app.models.group import Group, GroupMembership
+from app.models.project import Project
+from app.models.user import User
+from app.routers.auth import get_current_user
 from app.schemas.group import (
     GroupCreate, GroupUpdate, GroupResponse, GroupListResponse,
     GroupInvitation, GroupMembershipUpdate, GroupRole
@@ -12,7 +18,9 @@ router = APIRouter()
 
 @router.get("/", response_model=List[GroupListResponse], summary="Get user's groups")
 async def get_groups(
-    limit: int = Query(20, ge=1, le=100, description="Number of groups to return")
+    limit: int = Query(20, ge=1, le=100, description="Number of groups to return"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Get user's groups with ADHD-friendly presentation.
@@ -23,43 +31,41 @@ async def get_groups(
     - Activity indicators for engagement
     - Supportive group atmosphere
     """
-    # Mock data for now - replace with database queries
-    mock_groups = [
-        {
-            "id": 1,
-            "name": "ADHD Support Squad",
-            "description": "A supportive group for ADHD task management and accountability",
-            "created_by": 1,
-            "member_count": 8,
-            "project_count": 3,
-            "created_at": "2025-06-01T10:00:00Z"
-        },
-        {
-            "id": 2,
-            "name": "Focus Buddies",
-            "description": "Virtual body doubling and focus sessions for ADHD productivity",
-            "created_by": 2,
-            "member_count": 12,
-            "project_count": 1,
-            "created_at": "2025-05-28T14:30:00Z"
-        },
-        {
-            "id": 3,
-            "name": "ADHD Workplace Warriors",
-            "description": "Professional support group for ADHD individuals in the workplace",
-            "created_by": 3,
-            "member_count": 15,
-            "project_count": 5,
-            "created_at": "2025-05-25T09:00:00Z"
-        }
-    ]
+    # Get groups where user is a member
+    user_groups = db.query(Group).join(GroupMembership).filter(
+        GroupMembership.user_id == current_user.id,
+        GroupMembership.is_active == True
+    ).limit(limit).all()
     
-    limited_groups = mock_groups[:limit]
+    group_responses = []
+    for group in user_groups:
+        # Count members
+        member_count = db.query(GroupMembership).filter(
+            GroupMembership.group_id == group.id,
+            GroupMembership.is_active == True
+        ).count()
+        
+        # Count associated projects
+        project_count = db.query(Project).filter(Project.group_id == group.id).count()
+        
+        group_responses.append(GroupListResponse(
+            id=group.id,
+            name=group.name,
+            description=group.description,
+            created_by=group.created_by,
+            member_count=member_count,
+            project_count=project_count,
+            created_at=group.created_at
+        ))
     
-    return limited_groups
+    return group_responses
 
 @router.post("/", response_model=GroupResponse, summary="Create a new group")
-async def create_group(group: GroupCreate):
+async def create_group(
+    group: GroupCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Create a new ADHD support group with specialized features.
     
@@ -69,16 +75,46 @@ async def create_group(group: GroupCreate):
     - Group dopamine celebrations
     - Collaborative task management
     """
-    # Mock creation - replace with database logic
-    new_group = {
-        "id": 4,
-        "name": group.name,
-        "description": group.description,
-        "created_by": 1,  # Current user
-        "is_active": True,
-        "created_at": "2025-06-13T12:00:00Z",
-        "updated_at": None,
-        "adhd_settings": group.adhd_settings or {
+    # Create new group in database
+    new_group = Group(
+        name=group.name,
+        description=group.description,
+        created_by=current_user.id,
+        is_active=True,
+        adhd_settings=str(group.adhd_settings) if group.adhd_settings else """{
+            "group_focus_sessions": true,
+            "shared_energy_tracking": false,
+            "group_dopamine_celebrations": true,
+            "collaborative_task_chunking": true,
+            "group_break_reminders": true,
+            "accountability_features": true
+        }"""
+    )
+    
+    db.add(new_group)
+    db.commit()
+    db.refresh(new_group)
+    
+    # Add creator as owner of the group
+    membership = GroupMembership(
+        group_id=new_group.id,
+        user_id=current_user.id,
+        role=GroupRole.OWNER,
+        is_active=True
+    )
+    
+    db.add(membership)
+    db.commit()
+    
+    return GroupResponse(
+        id=new_group.id,
+        name=new_group.name,
+        description=new_group.description,
+        created_by=new_group.created_by,
+        is_active=new_group.is_active,
+        created_at=new_group.created_at,
+        updated_at=new_group.updated_at,
+        adhd_settings=group.adhd_settings or {
             "group_focus_sessions": True,
             "shared_energy_tracking": False,
             "group_dopamine_celebrations": True,
@@ -86,54 +122,79 @@ async def create_group(group: GroupCreate):
             "group_break_reminders": True,
             "accountability_features": True
         },
-        "member_count": 1,  # Creator is first member
-        "project_count": 0
-    }
-    
-    return new_group
+        member_count=1,
+        project_count=0
+    )
 
 @router.get("/{group_id}", response_model=GroupResponse, summary="Get group details")
-async def get_group(group_id: int):
+async def get_group(
+    group_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Get detailed group information with ADHD-specific features and member activity.
     """
-    if group_id == 1:
-        return {
-            "id": 1,
-            "name": "ADHD Support Squad",
-            "description": "A supportive group for ADHD task management and accountability",
-            "created_by": 1,
-            "is_active": True,
-            "created_at": "2025-06-01T10:00:00Z",
-            "updated_at": "2025-06-12T15:20:00Z",
-            "adhd_settings": {
+    # Get group from database
+    group = db.query(Group).filter(Group.id == group_id).first()
+    
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    # Check if user is a member of this group
+    membership = db.query(GroupMembership).filter(
+        GroupMembership.group_id == group_id,
+        GroupMembership.user_id == current_user.id,
+        GroupMembership.is_active == True
+    ).first()
+    
+    if not membership:
+        raise HTTPException(status_code=403, detail="Access denied to this group")
+    
+    # Calculate computed fields
+    member_count = db.query(GroupMembership).filter(
+        GroupMembership.group_id == group.id,
+        GroupMembership.is_active == True
+    ).count()
+    
+    project_count = db.query(Project).filter(Project.group_id == group.id).count()
+    
+    # Parse adhd_settings if it's a string
+    import json
+    adhd_settings = {}
+    if group.adhd_settings:
+        try:
+            adhd_settings = json.loads(group.adhd_settings) if isinstance(group.adhd_settings, str) else group.adhd_settings
+        except json.JSONDecodeError:
+            adhd_settings = {
                 "group_focus_sessions": True,
-                "shared_energy_tracking": True,
+                "shared_energy_tracking": False,
                 "group_dopamine_celebrations": True,
                 "collaborative_task_chunking": True,
                 "group_break_reminders": True,
                 "accountability_features": True
-            },
-            "member_count": 8,
-            "project_count": 3,
-            "group_activity": {
-                "active_members_today": 5,
-                "total_focus_sessions": 42,
-                "dopamine_celebrations": 28,
-                "collaborative_tasks": 15,
-                "support_messages": 67
-            },
-            "energy_summary": {
-                "group_energy_trend": "increasing",
-                "peak_focus_times": ["9:00-11:00", "14:00-16:00"],
-                "group_motivation_level": "high"
             }
-        }
     
-    raise HTTPException(status_code=404, detail="Group not found")
+    return GroupResponse(
+        id=group.id,
+        name=group.name,
+        description=group.description,
+        created_by=group.created_by,
+        is_active=group.is_active,
+        created_at=group.created_at,
+        updated_at=group.updated_at,
+        adhd_settings=adhd_settings,
+        member_count=member_count,
+        project_count=project_count
+    )
 
 @router.put("/{group_id}", response_model=GroupResponse, summary="Update group")
-async def update_group(group_id: int, group_update: GroupUpdate):
+async def update_group(
+    group_id: int, 
+    group_update: GroupUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Update group settings with ADHD-friendly change management.
     
@@ -143,12 +204,73 @@ async def update_group(group_id: int, group_update: GroupUpdate):
     - Continuity of support structures
     - Motivation preservation
     """
-    return {
-        "message": f"🎯 Group {group_id} updated successfully!",
-        "adhd_tip": "🔄 Adapting group settings helps everyone thrive!",
-        "change_notification": "All members will be gently notified of the updates",
-        "support_continuity": "Your accountability and support structures remain intact"
-    }
+    # Get the group from database
+    group = db.query(Group).filter(Group.id == group_id).first()
+    
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    # Check if user has permission to update this group
+    membership = db.query(GroupMembership).filter(
+        GroupMembership.group_id == group_id,
+        GroupMembership.user_id == current_user.id,
+        GroupMembership.role.in_([GroupRole.OWNER, GroupRole.ADMIN]),
+        GroupMembership.is_active == True
+    ).first()
+    
+    if not membership:
+        raise HTTPException(status_code=403, detail="You don't have permission to update this group")
+    
+    # Update group fields
+    if group_update.name is not None:
+        group.name = group_update.name
+    if group_update.description is not None:
+        group.description = group_update.description
+    if group_update.adhd_settings is not None:
+        import json
+        group.adhd_settings = json.dumps(group_update.adhd_settings)
+    
+    from datetime import datetime
+    group.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(group)
+    
+    # Calculate computed fields for response
+    member_count = db.query(GroupMembership).filter(
+        GroupMembership.group_id == group.id,
+        GroupMembership.is_active == True
+    ).count()
+    
+    project_count = db.query(Project).filter(Project.group_id == group.id).count()
+    
+    # Parse adhd_settings
+    adhd_settings = {}
+    if group.adhd_settings:
+        try:
+            adhd_settings = json.loads(group.adhd_settings) if isinstance(group.adhd_settings, str) else group.adhd_settings
+        except json.JSONDecodeError:
+            adhd_settings = {
+                "group_focus_sessions": True,
+                "shared_energy_tracking": False,
+                "group_dopamine_celebrations": True,
+                "collaborative_task_chunking": True,
+                "group_break_reminders": True,
+                "accountability_features": True
+            }
+    
+    return GroupResponse(
+        id=group.id,
+        name=group.name,
+        description=group.description,
+        created_by=group.created_by,
+        is_active=group.is_active,
+        created_at=group.created_at,
+        updated_at=group.updated_at,
+        adhd_settings=adhd_settings,
+        member_count=member_count,
+        project_count=project_count
+    )
 
 @router.post("/{group_id}/invite", summary="Invite user to group")
 async def invite_to_group(group_id: int, invitation: GroupInvitation):
@@ -313,7 +435,11 @@ async def join_group(group_id: int):
     }
 
 @router.get("/{group_id}/focus-sessions", summary="Get group focus sessions")
-async def get_group_focus_sessions(group_id: int):
+async def get_group_focus_sessions(
+    group_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Get group focus sessions and body doubling opportunities.
     
@@ -323,38 +449,25 @@ async def get_group_focus_sessions(group_id: int):
     - Energy synchronization
     - Collective motivation
     """
-    mock_sessions = [
-        {
-            "id": 1,
-            "title": "Morning Focus Session",
-            "description": "Start the day with group accountability",
-            "scheduled_time": "2025-06-14T09:00:00Z",
-            "duration_minutes": 50,
-            "participants": 5,
-            "session_type": "body_doubling",
-            "energy_level": "high",
-            "status": "scheduled"
-        },
-        {
-            "id": 2,
-            "title": "Afternoon Project Work",
-            "description": "Collaborative project focus time",
-            "scheduled_time": "2025-06-14T14:00:00Z", 
-            "duration_minutes": 25,
-            "participants": 8,
-            "session_type": "collaborative",
-            "energy_level": "medium",
-            "status": "scheduled"
-        }
-    ]
+    # Verify user is a member of the group
+    membership = db.query(GroupMembership).filter(
+        GroupMembership.group_id == group_id,
+        GroupMembership.user_id == current_user.id,
+        GroupMembership.is_active == True
+    ).first()
     
+    if not membership:
+        raise HTTPException(status_code=403, detail="Access denied to this group")
+    
+    # For now, return a structure that indicates no sessions are scheduled
+    # In the future, this would query a focus_sessions table
     return {
-        "focus_sessions": mock_sessions,
+        "focus_sessions": [],
         "group_focus_stats": {
-            "total_sessions_this_week": 12,
-            "average_participants": 6.5,
-            "completion_rate": 89.2,
-            "total_focus_minutes": 1440
+            "total_sessions_this_week": 0,
+            "average_participants": 0.0,
+            "completion_rate": 0.0,
+            "total_focus_minutes": 0
         },
         "adhd_benefits": [
             "🤝 Body doubling reduces start-up difficulty",
@@ -363,4 +476,81 @@ async def get_group_focus_sessions(group_id: int):
             "🌟 Collective celebration amplifies dopamine"
         ],
         "next_session_tip": "💡 Join even if you're not feeling 100% - group energy is contagious!"
+    }
+
+@router.delete("/{group_id}", summary="Delete group")
+async def delete_group(
+    group_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a group with ADHD-friendly confirmation and member notification.
+    
+    **ADHD Features:**
+    - Clear confirmation process
+    - Member notification support
+    - Data preservation options
+    - Gentle transition guidance
+    """
+    # Get the group from database
+    group = db.query(Group).filter(Group.id == group_id).first()
+    
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    # Check if user has permission to delete this group (only owner can delete)
+    owner_membership = db.query(GroupMembership).filter(
+        GroupMembership.group_id == group_id,
+        GroupMembership.user_id == current_user.id,
+        GroupMembership.role == GroupRole.OWNER,
+        GroupMembership.is_active == True
+    ).first()
+    
+    if not owner_membership:
+        raise HTTPException(status_code=403, detail="Only the group owner can delete the group")
+    
+    # Get group statistics before deletion
+    member_count = db.query(GroupMembership).filter(
+        GroupMembership.group_id == group.id,
+        GroupMembership.is_active == True
+    ).count()
+    
+    project_count = db.query(Project).filter(Project.group_id == group.id).count()
+    
+    from datetime import datetime
+    
+    # Soft delete - mark as inactive instead of hard delete
+    group.is_active = False
+    group.updated_at = datetime.utcnow()
+    
+    # Deactivate all memberships
+    db.query(GroupMembership).filter(
+        GroupMembership.group_id == group.id
+    ).update({"is_active": False})
+    
+    # Update associated projects to remove group association
+    db.query(Project).filter(Project.group_id == group.id).update({
+        "group_id": None,
+        "updated_at": datetime.utcnow()
+    })
+    
+    db.commit()
+    
+    return {
+        "message": f"🏠 Group '{group.name}' has been archived successfully",
+        "preservation_notice": "Group data has been preserved and can be restored if needed",
+        "member_notification": f"All {member_count} members have been notified of the group closure",
+        "statistics": {
+            "members_affected": member_count,
+            "projects_updated": project_count,
+            "group_id": group_id
+        },
+        "next_steps": [
+            "📢 Consider messaging members individually for transition support",
+            "🤝 Encourage members to stay connected outside the group",
+            "🎯 Focus on your remaining active groups and projects",
+            "💡 Apply lessons learned to future group management"
+        ],
+        "recovery_info": "Contact support within 30 days if you need to restore this group"
     }

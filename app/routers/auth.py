@@ -167,28 +167,54 @@ def get_current_user(
     """
     Get current authenticated user from JWT token.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
+        logger.info("🔐 Authentication check started")
+        logger.info(f"🔐 Token received: {credentials.credentials[:20]}..." if credentials.credentials else "No token")
+        
         payload = verify_token(credentials.credentials)
+        logger.info(f"🔐 JWT payload decoded successfully: {payload}")
+        
         user_id: int = payload.get("user_id")
+        logger.info(f"🔐 User ID from token: {user_id}")
         
         if user_id is None:
+            logger.error("❌ No user_id found in JWT payload")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid authentication credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
+        logger.info(f"🔍 Looking up user in database with ID: {user_id}")
         user = db.query(User).filter(User.id == user_id).first()
+        
         if user is None:
+            logger.error(f"❌ User not found in database with ID: {user_id}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
+        logger.info(f"✅ Authentication successful for user: {user.email} (ID: {user.id})")
         return user
         
+    except HTTPException as he:
+        logger.error(f"❌ HTTP Exception during authentication: {he.detail}")
+        raise he
     except Exception as e:
+        logger.error(f"❌ Unexpected error during authentication: {str(e)}")
+        logger.error(f"❌ Error type: {type(e).__name__}")
+        import traceback
+        logger.error(f"❌ Stack trace: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
