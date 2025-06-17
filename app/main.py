@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import time
-from app.routers import tasks, users, analytics, projects, groups, auth
+from app.routers import tasks, users, analytics, projects, groups, auth, invitations
 from app.database import create_tables
 import os
 import logging
@@ -172,6 +172,7 @@ app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(groups.router, prefix="/api/groups", tags=["groups"])
+app.include_router(invitations.router, prefix="/api/invitations", tags=["invitations"])
 
 @app.get("/", tags=["root"])
 async def read_root():

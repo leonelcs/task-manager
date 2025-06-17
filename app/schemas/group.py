@@ -89,7 +89,9 @@ class GroupListResponse(BaseModel):
     created_by: int
     member_count: int
     project_count: int
+    is_active: bool
     created_at: datetime
+    adhd_settings: Optional[Dict[str, Any]] = None
     
     class Config:
         from_attributes = True

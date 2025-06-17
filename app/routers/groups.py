@@ -48,6 +48,23 @@ async def get_groups(
         # Count associated projects
         project_count = db.query(Project).filter(Project.group_id == group.id).count()
         
+        # Parse adhd_settings from JSON string
+        import json
+        adhd_settings = {}
+        try:
+            if group.adhd_settings:
+                adhd_settings = json.loads(group.adhd_settings)
+        except (json.JSONDecodeError, TypeError):
+            # Fallback to default settings if parsing fails
+            adhd_settings = {
+                "group_focus_sessions": True,
+                "shared_energy_tracking": False,
+                "group_dopamine_celebrations": True,
+                "collaborative_task_chunking": True,
+                "group_break_reminders": True,
+                "accountability_features": True
+            }
+        
         group_responses.append(GroupListResponse(
             id=group.id,
             name=group.name,
@@ -55,7 +72,9 @@ async def get_groups(
             created_by=group.created_by,
             member_count=member_count,
             project_count=project_count,
-            created_at=group.created_at
+            is_active=group.is_active,
+            created_at=group.created_at,
+            adhd_settings=adhd_settings
         ))
     
     return group_responses
