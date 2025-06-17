@@ -1,5 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import asyncio
+import time
 from app.routers import tasks, users, analytics, projects, groups, auth
 from app.database import create_tables
 import os
@@ -7,11 +9,20 @@ import logging
 from dotenv import load_dotenv
 
 # Configure logging
+import os
+# Get the project root directory (where the log file should be)
+current_dir = os.path.dirname(__file__)  # /path/to/task-manager/app
+project_root = os.path.dirname(current_dir)  # /path/to/task-manager
+log_file_path = os.path.join(project_root, 'adhd_task_manager.log')
+
+print(f"🔍 Log file path: {log_file_path}")
+print(f"🔍 Log file exists: {os.path.exists(log_file_path)}")
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('adhd_task_manager.log'),
+        logging.FileHandler(log_file_path),
         logging.StreamHandler()
     ]
 )
@@ -100,39 +111,57 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add request/response logging middleware
-from fastapi import Request, Response
-import time
-import json
+# Timeout middleware disabled - causing issues with task creation
+# Will rely on uvicorn timeouts and SQLAlchemy connection timeouts instead
+# @app.middleware("http")
+# async def timeout_middleware(request: Request, call_next):
+#     """Add request timeout middleware to prevent hanging requests."""
+#     start_time = time.time()
+#     
+#     try:
+#         # Set timeout based on request type
+#         if request.method == "POST":
+#             timeout_seconds = 30  # Longer timeout for POST requests (task creation, etc.)
+#         elif request.method == "PUT":
+#             timeout_seconds = 20  # Medium timeout for updates
+#         else:
+#             timeout_seconds = 15  # Shorter timeout for GET requests
+#         
+#         logger.info(f"🕐 Request {request.method} {request.url.path} - timeout set to {timeout_seconds}s")
+#         
+#         # Execute the request with timeout
+#         response = await asyncio.wait_for(
+#             call_next(request), 
+#             timeout=timeout_seconds
+#         )
+#         
+#         process_time = time.time() - start_time
+#         logger.info(f"⏱️ Request {request.method} {request.url.path} completed in {process_time:.2f}s")
+#         
+#         return response
+#         
+#     except asyncio.TimeoutError:
+#         process_time = time.time() - start_time
+#         logger.error(f"⏰ Request {request.method} {request.url.path} timed out after {process_time:.2f}s")
+#         raise HTTPException(
+#             status_code=504, 
+#             detail=f"Request timed out after {timeout_seconds} seconds. Please try again or contact support if this persists."
+#         )
+#     except Exception as e:
+#         process_time = time.time() - start_time
+#         logger.error(f"❌ Request {request.method} {request.url.path} failed after {process_time:.2f}s: {str(e)}")
+#         raise
 
+# Simple request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all HTTP requests and responses for debugging"""
+    """Log HTTP requests for monitoring"""
     start_time = time.time()
     
-    # Log request details
-    logger.info("📤 " + "="*50)
-    logger.info(f"📤 {request.method} {request.url}")
-    logger.info(f"📤 Headers: {dict(request.headers)}")
-    logger.info(f"📤 Client: {request.client}")
-    
-    # Log request body for POST/PUT requests
-    if request.method in ["POST", "PUT", "PATCH"]:
-        try:
-            body = await request.body()
-            if body:
-                logger.info(f"📤 Body: {body.decode('utf-8')[:500]}...")
-        except Exception as e:
-            logger.error(f"📤 Could not read request body: {e}")
-    
-    # Process request
     response = await call_next(request)
     
-    # Log response details
     process_time = time.time() - start_time
-    logger.info(f"📥 Response: {response.status_code}")
-    logger.info(f"📥 Time: {process_time:.3f}s")
-    logger.info("📥 " + "="*50)
+    logger.info(f"{request.method} {request.url.path} - {response.status_code} - {process_time:.3f}s")
     
     return response
 
@@ -179,13 +208,13 @@ async def startup_event():
     """
     Startup event handler.
     """
-    print("🚀 ADHD Task Manager API is starting up...")
-    print("💡 Remember: Every small step counts!")
+    logger.info("🚀 ADHD Task Manager API startup complete!")
+    logger.info("💡 Remember: Every small step counts!")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """
     Shutdown event handler.
     """
-    print("👋 ADHD Task Manager API is shutting down...")
-    print("✨ Great job on all the tasks completed today!")
+    logger.info("👋 ADHD Task Manager API shutting down...")
+    logger.info("✨ Great job on all the tasks completed today!")

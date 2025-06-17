@@ -12,8 +12,12 @@ from app.schemas.task import (
     TaskCreate, TaskUpdate, TaskResponse, TaskListResponse, TaskComplete,
     TaskImpactClassification, TaskSuggestion
 )
+import logging
 
 router = APIRouter()
+
+# Initialize logger for this router
+logger = logging.getLogger("app.routers.tasks")
 
 @router.get("/impact-classification", response_model=TaskImpactClassification, summary="Get Rock/Pebbles/Sand classification guide")
 async def get_impact_classification_guide():
@@ -108,37 +112,16 @@ async def create_task(
     - **Pebbles**: Great for building momentum between rocks
     - **Sand**: Let these fill in naturally, don't let them crowd out rocks
     """
-    import logging
-    logger = logging.getLogger(__name__)
-    
+    logger.info(f"Creating task: {task.title} for user {current_user.email}")
     try:
-        logger.info("=" * 80)
-        logger.info("🎯 TASK CREATION STARTED")
-        logger.info("=" * 80)
-        logger.info(f"📥 Request from user: {current_user.id} ({current_user.email})")
-        logger.info(f"📋 Task data received:")
-        logger.info(f"   - Title: {task.title}")
-        logger.info(f"   - Description: {task.description}")
-        logger.info(f"   - Task Type: {task.task_type}")
-        logger.info(f"   - Priority: {task.priority}")
-        logger.info(f"   - Impact Size: {task.impact_size}")
-        logger.info(f"   - Estimated Duration: {task.estimated_duration}")
-        logger.info(f"   - Due Date: {task.due_date}")
-        logger.info(f"   - Project ID: {task.project_id}")
-        
         # Validate required fields
         if not task.title or task.title.strip() == "":
-            logger.error("❌ Task creation failed: Title is required")
             raise HTTPException(status_code=400, detail="Task title is required")
         
         if not task.impact_size:
-            logger.error("❌ Task creation failed: Impact size is required")
             raise HTTPException(status_code=400, detail="Impact size is required")
         
-        logger.info("✅ Basic validation passed")
-        
         # Create ADHD features based on task properties
-        logger.info("🧠 Creating ADHD features...")
         adhd_features = {
             "dopamine_reward": _get_impact_based_reward(task.impact_size),
             "break_reminder": True,
@@ -149,19 +132,15 @@ async def create_task(
             "hyperfocus_risk": task.impact_size == ADHDImpactSize.ROCK,
             "collaboration_boost": False
         }
-        logger.info(f"🧠 ADHD features created: {adhd_features}")
         
         # Validate project_id if provided
+        project = None
         if task.project_id:
-            logger.info(f"🔍 Validating project ID: {task.project_id}")
-            project = db.query(Project).filter(Project.id == task.project_id).first()
+            project = db.query(Project).filter(Project.id == task.project_id, Project.owner_id == current_user.id).first()
             if not project:
-                logger.error(f"❌ Project not found: {task.project_id}")
-                raise HTTPException(status_code=400, detail=f"Project with ID {task.project_id} not found")
-            logger.info(f"✅ Project validated: {project.name}")
+                raise HTTPException(status_code=404, detail="Project not found or you are not the owner")
         
         # Create new task
-        logger.info("💾 Creating task object...")
         db_task = Task(
             title=task.title,
             description=task.description,
@@ -178,30 +157,21 @@ async def create_task(
             completion_history=[],
             focus_sessions=[]
         )
-        logger.info("✅ Task object created successfully")
         
-        # Database operations
-        logger.info("💾 Adding task to database...")
+        # Save to database
         db.add(db_task)
-        logger.info("💾 Committing transaction...")
         db.commit()
-        logger.info("💾 Refreshing task object...")
         db.refresh(db_task)
-        logger.info(f"✅ Task saved with ID: {db_task.id}")
+        logger.info(f"Task created successfully with ID: {db_task.id}")
         
     except HTTPException as he:
-        logger.error(f"❌ HTTP Exception during task creation: {he.detail}")
+        logger.error(f"Task creation failed for user {current_user.email}: {he.detail}")
         db.rollback()
         raise he
     except Exception as e:
-        logger.error(f"❌ Unexpected error during task creation: {str(e)}")
-        logger.error(f"❌ Error type: {type(e).__name__}")
-        import traceback
-        logger.error(f"❌ Stack trace: {traceback.format_exc()}")
+        logger.error(f"Unexpected error during task creation: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-    
-    logger.info("🎉 Task creation completed successfully!")
     
     # Return the created task
     return TaskResponse(

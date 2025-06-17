@@ -21,6 +21,7 @@ def create_database_engine():
         "max_overflow": config.DB_MAX_OVERFLOW,
         "pool_timeout": config.DB_POOL_TIMEOUT,
         "pool_recycle": config.DB_POOL_RECYCLE,
+        "pool_pre_ping": True,  # Verify connections before use
         "echo": config.DEBUG,  # Log SQL queries in debug mode
     }
     
@@ -37,9 +38,9 @@ def create_database_engine():
     elif "mysql" in database_url:
         engine_args["connect_args"] = {
             "charset": "utf8mb4",
-            "connect_timeout": 60,
-            "read_timeout": 30,
-            "write_timeout": 30,
+            "connect_timeout": 10,  # Reduced from 60 to 10 seconds
+            "read_timeout": 5,      # Reduced from 30 to 5 seconds
+            "write_timeout": 5,     # Reduced from 30 to 5 seconds
         }
         
         # Add SSL settings for production
