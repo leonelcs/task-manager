@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models.project import Project, ProjectCollaboration
 from app.models.task import Task
 from app.models.user import User
+from app.models.group import Group, GroupMembership
 from app.routers.auth import get_current_user
 from app.schemas.project import (
     ProjectCreate, ProjectUpdate, ProjectResponse, ProjectListResponse,
@@ -273,6 +274,26 @@ async def update_project(
     if not has_permission:
         raise HTTPException(status_code=403, detail="You don't have permission to update this project")
     
+    # Validate group access if group_id is being updated
+    if project_update.group_id is not None:
+        if project_update.group_id != 0:  # 0 means remove group association
+            group = db.query(Group).filter(Group.id == project_update.group_id).first()
+            if not group:
+                raise HTTPException(status_code=404, detail="Group not found")
+            
+            # Check if user is a member of the group
+            group_membership = db.query(GroupMembership).filter(
+                GroupMembership.group_id == project_update.group_id,
+                GroupMembership.user_id == current_user.id,
+                GroupMembership.is_active == True
+            ).first()
+            
+            if not group_membership:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="You must be a member of the group to associate the project with it"
+                )
+    
     # Update project fields
     if project_update.name is not None:
         project.name = project_update.name
@@ -280,12 +301,14 @@ async def update_project(
         project.description = project_update.description
     if project_update.status is not None:
         project.status = project_update.status
+    if project_update.project_type is not None:
+        project.project_type = project_update.project_type
     if project_update.start_date is not None:
         project.start_date = project_update.start_date
     if project_update.due_date is not None:
         project.due_date = project_update.due_date
-    if project_update.adhd_features is not None:
-        project.adhd_features = project_update.adhd_features
+    if project_update.group_id is not None:
+        project.group_id = project_update.group_id if project_update.group_id != 0 else None
     if project_update.is_public_joinable is not None:
         project.is_public_joinable = project_update.is_public_joinable
     if project_update.max_collaborators is not None:
@@ -334,7 +357,12 @@ async def update_project(
     )
 
 @router.post("/{project_id}/invite", summary="Invite user to project")
-async def invite_to_project(project_id: int, invitation: ProjectInvitation):
+async def invite_to_project(
+    project_id: int, 
+    invitation: ProjectInvitation,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Invite a user to collaborate on a project with ADHD-friendly onboarding.
     
@@ -344,13 +372,81 @@ async def invite_to_project(project_id: int, invitation: ProjectInvitation):
     - Supportive welcome message
     - ADHD-specific collaboration tips
     """
+    # Get the project
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check if current user has permission to invite (owner or admin collaborator)
+    has_permission = (
+        project.owner_id == current_user.id or
+        db.query(ProjectCollaboration).filter(
+            ProjectCollaboration.project_id == project_id,
+            ProjectCollaboration.user_id == current_user.id,
+            ProjectCollaboration.role.in_(['admin', 'owner']),
+            ProjectCollaboration.is_active == True
+        ).first() is not None
+    )
+    
+    if not has_permission:
+        raise HTTPException(
+            status_code=403, 
+            detail="Only project owners and admins can send invitations"
+        )
+    
+    # Check if invited user exists
+    invited_user = db.query(User).filter(User.email == invitation.user_email).first()
+    if not invited_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if user is already a collaborator
+    existing_collaboration = db.query(ProjectCollaboration).filter(
+        ProjectCollaboration.project_id == project_id,
+        ProjectCollaboration.user_id == invited_user.id,
+        ProjectCollaboration.is_active == True
+    ).first()
+    
+    if existing_collaboration:
+        raise HTTPException(
+            status_code=400,
+            detail="User is already a collaborator on this project"
+        )
+    
+    # Create collaboration
+    collaboration = ProjectCollaboration(
+        project_id=project_id,
+        user_id=invited_user.id,
+        role=invitation.role,
+        invited_by=current_user.id,
+        is_active=True,
+        collaboration_settings={
+            "share_focus_sessions": False,
+            "receive_progress_notifications": True,
+            "participate_in_group_breaks": True,
+            "share_energy_levels": False,
+            "receive_dopamine_boosts": True,
+            "task_assignment_notifications": True
+        },
+        contribution_stats={
+            "tasks_completed": 0,
+            "focus_sessions_joined": 0,
+            "helpful_comments": 0,
+            "dopamine_given": 0,
+            "last_active": None
+        }
+    )
+    
+    db.add(collaboration)
+    db.commit()
+    
     return {
-        "message": f"🎉 Invitation sent to {invitation.user_email}!",
+        "message": f"🎉 {invited_user.full_name or invited_user.email} has been added to the project!",
         "invitation_details": {
             "project_id": project_id,
+            "project_name": project.name,
             "recipient": invitation.user_email,
             "role": invitation.role,
-            "expires_in": "7 days"
+            "added_by": current_user.full_name or current_user.email
         },
         "adhd_benefits": [
             "Shared accountability and support",

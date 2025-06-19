@@ -60,6 +60,7 @@ class ProjectUpdate(BaseModel):
     max_collaborators: Optional[int] = Field(None, ge=1, le=100)
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
+    group_id: Optional[int] = Field(None, description="Optional group to associate with")
 
 
 class ProjectCollaboratorInfo(BaseModel):
