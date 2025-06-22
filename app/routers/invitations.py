@@ -1,18 +1,18 @@
 """
-Group invitation router for ADHD Task Manager.
+SharedGroup invitation router for ADHD Task Manager.
 """
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime, timedelta
 from app.database import get_db
-from app.models.invitation import GroupInvitation, InvitationStatus
-from app.models.group import Group, GroupMembership, GroupRole
+from app.models.invitation import SharedGroupInvitation, InvitationStatus
+from app.models.group import SharedGroup, SharedGroupMembership, SharedGroupRole
 from app.models.user import User
 from app.routers.auth import get_current_user
 from app.schemas.invitation import (
-    GroupInvitationCreate, GroupInvitationResponse, GroupInvitationAccept,
-    GroupInvitationList, InvitationEmailData
+    SharedGroupInvitationCreate, SharedGroupInvitationResponse, SharedGroupInvitationAccept,
+    SharedGroupInvitationList, InvitationEmailData
 )
 from app.services.email_service import send_invitation_email
 import json
@@ -20,10 +20,10 @@ import json
 router = APIRouter()
 
 
-@router.post("/groups/{group_id}/invite", response_model=GroupInvitationResponse)
-async def invite_to_group(
-    group_id: int,
-    invitation_data: GroupInvitationCreate,
+@router.post("/shared-groups/{shared_group_id}/invite", response_model=SharedGroupInvitationResponse)
+async def invite_to_shared_group(
+    shared_group_id: str,
+    invitation_data: SharedGroupInvitationCreate,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -38,16 +38,16 @@ async def invite_to_group(
     - Welcoming community atmosphere
     """
     # Get the group
-    group = db.query(Group).filter(Group.id == group_id).first()
+    group = db.query(SharedGroup).filter(SharedGroup.id == shared_group_id).first()
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
     
     # Check if current user has permission to invite (owner or admin)
-    membership = db.query(GroupMembership).filter(
-        GroupMembership.group_id == group_id,
-        GroupMembership.user_id == current_user.id,
-        GroupMembership.role.in_([GroupRole.OWNER, GroupRole.ADMIN]),
-        GroupMembership.is_active == True
+    membership = db.query(SharedGroupMembership).filter(
+        SharedGroupMembership.shared_group_id == shared_group_id,
+        SharedGroupMembership.user_id == current_user.id,
+        SharedGroupMembership.role.in_([SharedGroupRole.OWNER, SharedGroupRole.ADMIN]),
+        SharedGroupMembership.is_active == True
     ).first()
     
     if not membership:
@@ -57,9 +57,9 @@ async def invite_to_group(
         )
     
     # Check if user is already a member
-    existing_membership = db.query(GroupMembership).filter(
-        GroupMembership.group_id == group_id,
-        GroupMembership.is_active == True
+    existing_membership = db.query(SharedGroupMembership).filter(
+        SharedGroupMembership.shared_group_id == shared_group_id,
+        SharedGroupMembership.is_active == True
     ).join(User).filter(User.email == invitation_data.invited_email).first()
     
     if existing_membership:
@@ -69,10 +69,10 @@ async def invite_to_group(
         )
     
     # Check for existing pending invitation
-    existing_invitation = db.query(GroupInvitation).filter(
-        GroupInvitation.group_id == group_id,
-        GroupInvitation.invited_email == invitation_data.invited_email,
-        GroupInvitation.status == InvitationStatus.PENDING
+    existing_invitation = db.query(SharedGroupInvitation).filter(
+        SharedGroupInvitation.shared_group_id == shared_group_id,
+        SharedGroupInvitation.invited_email == invitation_data.invited_email,
+        SharedGroupInvitation.status == InvitationStatus.PENDING
     ).first()
     
     if existing_invitation:
@@ -85,8 +85,8 @@ async def invite_to_group(
     invited_user = db.query(User).filter(User.email == invitation_data.invited_email).first()
     
     # Create invitation
-    invitation = GroupInvitation(
-        group_id=group_id,
+    invitation = SharedGroupInvitation(
+        shared_group_id=shared_group_id,
         invited_email=invitation_data.invited_email,
         invited_user_id=invited_user.id if invited_user else None,
         invited_by=current_user.id,
@@ -112,20 +112,24 @@ async def invite_to_group(
         expires_at=invitation.expires_at
     )
     
-    if group.adhd_settings:
-        try:
-            adhd_settings = json.loads(group.adhd_settings)
-            email_data.group_features = adhd_settings
-        except json.JSONDecodeError:
-            pass
+    # Build group features from individual ADHD settings
+    group_features = {
+        "group_focus_sessions": group.group_focus_sessions,
+        "shared_energy_tracking": group.shared_energy_tracking,
+        "group_dopamine_celebrations": group.group_dopamine_celebrations,
+        "collaborative_task_chunking": group.collaborative_task_chunking,
+        "group_break_reminders": group.group_break_reminders,
+        "accountability_features": group.accountability_features
+    }
+    email_data.group_features = group_features
     
     # Send invitation email in background
     background_tasks.add_task(send_invitation_email, email_data)
     
-    return GroupInvitationResponse(
+    return SharedGroupInvitationResponse(
         id=invitation.id,
         token=invitation.token,
-        group_id=invitation.group_id,
+        shared_group_id=invitation.shared_group_id,
         invited_email=invitation.invited_email,
         invited_user_id=invitation.invited_user_id,
         invited_by=invitation.invited_by,
@@ -141,13 +145,13 @@ async def invite_to_group(
     )
 
 
-@router.get("/{token}", response_model=GroupInvitationResponse)
+@router.get("/{token}", response_model=SharedGroupInvitationResponse)
 async def get_invitation(token: str, db: Session = Depends(get_db)):
     """
     Get invitation details by token.
     """
-    invitation = db.query(GroupInvitation).filter(
-        GroupInvitation.token == token
+    invitation = db.query(SharedGroupInvitation).filter(
+        SharedGroupInvitation.token == token
     ).first()
     
     if not invitation:
@@ -159,13 +163,13 @@ async def get_invitation(token: str, db: Session = Depends(get_db)):
         db.commit()
         
     # Get group and inviter details
-    group = db.query(Group).filter(Group.id == invitation.group_id).first()
+    group = db.query(SharedGroup).filter(SharedGroup.id == invitation.shared_group_id).first()
     inviter = db.query(User).filter(User.id == invitation.invited_by).first()
     
-    return GroupInvitationResponse(
+    return SharedGroupInvitationResponse(
         id=invitation.id,
         token=invitation.token,
-        group_id=invitation.group_id,
+        shared_group_id=invitation.shared_group_id,
         invited_email=invitation.invited_email,
         invited_user_id=invitation.invited_user_id,
         invited_by=invitation.invited_by,
@@ -184,16 +188,16 @@ async def get_invitation(token: str, db: Session = Depends(get_db)):
 @router.post("/{token}/accept")
 async def accept_invitation(
     token: str,
-    accept_data: GroupInvitationAccept,
+    accept_data: SharedGroupInvitationAccept,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Accept a group invitation with ADHD-friendly onboarding.
     """
-    invitation = db.query(GroupInvitation).filter(
-        GroupInvitation.token == token,
-        GroupInvitation.status == InvitationStatus.PENDING
+    invitation = db.query(SharedGroupInvitation).filter(
+        SharedGroupInvitation.token == token,
+        SharedGroupInvitation.status == InvitationStatus.PENDING
     ).first()
     
     if not invitation:
@@ -213,20 +217,20 @@ async def accept_invitation(
         )
     
     # Check if user is already a member
-    existing_membership = db.query(GroupMembership).filter(
-        GroupMembership.group_id == invitation.group_id,
-        GroupMembership.user_id == current_user.id,
-        GroupMembership.is_active == True
+    existing_membership = db.query(SharedGroupMembership).filter(
+        SharedGroupMembership.shared_group_id == invitation.shared_group_id,
+        SharedGroupMembership.user_id == current_user.id,
+        SharedGroupMembership.is_active == True
     ).first()
     
     if existing_membership:
         raise HTTPException(status_code=400, detail="You are already a member of this group")
     
     # Create group membership
-    membership = GroupMembership(
-        group_id=invitation.group_id,
+    membership = SharedGroupMembership(
+        shared_group_id=invitation.shared_group_id,
         user_id=current_user.id,
-        role=GroupRole.MEMBER if invitation.role == "member" else GroupRole.ADMIN,
+        role=SharedGroupRole.MEMBER if invitation.role == "member" else SharedGroupRole.ADMIN,
         is_active=True
     )
     
@@ -250,11 +254,11 @@ async def accept_invitation(
     db.commit()
     
     # Get group details for response
-    group = db.query(Group).filter(Group.id == invitation.group_id).first()
+    group = db.query(SharedGroup).filter(SharedGroup.id == invitation.shared_group_id).first()
     
     return {
         "message": f"🎉 Welcome to {group.name}!",
-        "group_id": invitation.group_id,
+        "group_id": invitation.shared_group_id,
         "group_name": group.name,
         "welcome_package": {
             "community_guidelines": [
@@ -293,9 +297,9 @@ async def decline_invitation(
     """
     Decline a group invitation.
     """
-    invitation = db.query(GroupInvitation).filter(
-        GroupInvitation.token == token,
-        GroupInvitation.status == InvitationStatus.PENDING
+    invitation = db.query(SharedGroupInvitation).filter(
+        SharedGroupInvitation.token == token,
+        SharedGroupInvitation.status == InvitationStatus.PENDING
     ).first()
     
     if not invitation:
@@ -320,7 +324,7 @@ async def decline_invitation(
     }
 
 
-@router.get("/users/me/invitations", response_model=GroupInvitationList)
+@router.get("/users/me/invitations", response_model=SharedGroupInvitationList)
 async def get_my_invitations(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -328,25 +332,25 @@ async def get_my_invitations(
     """
     Get all invitations for the current user.
     """
-    invitations = db.query(GroupInvitation).filter(
-        GroupInvitation.invited_email == current_user.email
-    ).order_by(GroupInvitation.created_at.desc()).all()
+    invitations = db.query(SharedGroupInvitation).filter(
+        SharedGroupInvitation.invited_email == current_user.email
+    ).order_by(SharedGroupInvitation.created_at.desc()).all()
     
     invitation_responses = []
     pending_count = 0
     
     for invitation in invitations:
         # Get group and inviter details
-        group = db.query(Group).filter(Group.id == invitation.group_id).first()
+        group = db.query(SharedGroup).filter(SharedGroup.id == invitation.shared_group_id).first()
         inviter = db.query(User).filter(User.id == invitation.invited_by).first()
         
         if invitation.status == InvitationStatus.PENDING:
             pending_count += 1
         
-        invitation_responses.append(GroupInvitationResponse(
+        invitation_responses.append(SharedGroupInvitationResponse(
             id=invitation.id,
             token=invitation.token,
-            group_id=invitation.group_id,
+            shared_group_id=invitation.shared_group_id,
             invited_email=invitation.invited_email,
             invited_user_id=invitation.invited_user_id,
             invited_by=invitation.invited_by,
@@ -361,7 +365,7 @@ async def get_my_invitations(
             inviter_name=inviter.full_name if inviter and inviter.full_name else inviter.email if inviter else None
         ))
     
-    return GroupInvitationList(
+    return SharedGroupInvitationList(
         invitations=invitation_responses,
         total=len(invitation_responses),
         pending_count=pending_count

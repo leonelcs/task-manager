@@ -55,7 +55,7 @@ class UserUpdate(BaseModel):
 
 class UserResponse(UserBase):
     """Schema for user response."""
-    id: int
+    id: str
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime]
@@ -71,7 +71,7 @@ class UserResponse(UserBase):
 
 class UserListResponse(BaseModel):
     """Schema for user list response (limited info)."""
-    id: int
+    id: str
     username: str
     full_name: Optional[str]
     is_active: bool
@@ -102,7 +102,7 @@ class EnergyLogCreate(EnergyLogBase):
 class EnergyLogResponse(EnergyLogBase):
     """Schema for energy log response."""
     id: int
-    user_id: int
+    user_id: str
     logged_at: datetime
     
     class Config:

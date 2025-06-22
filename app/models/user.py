@@ -4,13 +4,15 @@ User model for ADHD Task Manager.
 from sqlalchemy import Column, Integer, String, Boolean, JSON, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.mysql import CHAR
 from app.database import Base
+import uuid
 
 
 class User(Base):
     __tablename__ = "users"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(CHAR(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     username = Column(String(50), unique=True, index=True, nullable=True)  # Made nullable for Google OAuth
     email = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(128), nullable=True)  # Made nullable for Google OAuth
@@ -60,7 +62,7 @@ class User(Base):
     
     # Relationships
     owned_projects = relationship("Project", back_populates="owner")
-    group_memberships = relationship("GroupMembership", back_populates="user")
+    shared_group_memberships = relationship("SharedGroupMembership", back_populates="user")
     tasks = relationship("Task", foreign_keys="Task.assigned_user_id", back_populates="assigned_user")
     created_tasks = relationship("Task", foreign_keys="Task.created_by", back_populates="creator")
     energy_logs = relationship("EnergyLog", back_populates="user")
@@ -70,7 +72,7 @@ class EnergyLog(Base):
     __tablename__ = "energy_logs"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(CHAR(36), ForeignKey("users.id"), nullable=False, index=True)
     energy_level = Column(String(10), nullable=False)  # low, medium, high
     logged_at = Column(DateTime(timezone=True), server_default=func.now())
     duration_minutes = Column(Integer)  # How long this energy level lasted

@@ -187,10 +187,10 @@ async def send_welcome_email(user_email: str, user_name: str, group_name: str):
     pass
 
 
-async def send_group_notification(group_id: int, message: str, notification_type: str = "info"):
+async def send_group_notification(shared_group_id: str, message: str, notification_type: str = "info"):
     """
     Send notification to all group members.
     """
-    logger.info(f"📧 Group notification would be sent to group {group_id}: {message}")
+    logger.info(f"📧 Group notification would be sent to group {shared_group_id}: {message}")
     # TODO: Implement group notifications
     pass

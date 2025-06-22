@@ -6,8 +6,8 @@ from .user import (
     EnergyLogBase, EnergyLogCreate, EnergyLogResponse
 )
 from .group import (
-    GroupBase, GroupCreate, GroupUpdate, GroupResponse, GroupListResponse,
-    GroupInvitation, GroupMembershipUpdate, GroupMemberInfo, GroupRole
+    SharedGroupBase, SharedGroupCreate, SharedGroupUpdate, SharedGroupResponse, SharedGroupListResponse,
+    SharedGroupInvitation, SharedGroupMembershipUpdate, SharedGroupMemberInfo, SharedGroupRole
 )
 from .project import (
     ProjectBase, ProjectCreate, ProjectUpdate, ProjectResponse, ProjectListResponse,
@@ -26,8 +26,8 @@ __all__ = [
     "EnergyLogBase", "EnergyLogCreate", "EnergyLogResponse",
     
     # Group schemas
-    "GroupBase", "GroupCreate", "GroupUpdate", "GroupResponse", "GroupListResponse",
-    "GroupInvitation", "GroupMembershipUpdate", "GroupMemberInfo", "GroupRole",
+    "SharedGroupBase", "SharedGroupCreate", "SharedGroupUpdate", "SharedGroupResponse", "SharedGroupListResponse",
+    "SharedGroupInvitation", "SharedGroupMembershipUpdate", "SharedGroupMemberInfo", "SharedGroupRole",
     
     # Project schemas
     "ProjectBase", "ProjectCreate", "ProjectUpdate", "ProjectResponse", "ProjectListResponse",

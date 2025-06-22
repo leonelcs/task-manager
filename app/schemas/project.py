@@ -34,7 +34,7 @@ class ProjectBase(BaseModel):
 
 class ProjectCreate(ProjectBase):
     """Schema for creating a new project."""
-    group_id: Optional[int] = Field(None, description="Optional group to associate with")
+    shared_group_id: Optional[str] = Field(None, description="Optional shared group to associate with")
     
     class Config:
         json_schema_extra = {
@@ -45,7 +45,7 @@ class ProjectCreate(ProjectBase):
                 "status": "planning", 
                 "is_public_joinable": False,
                 "max_collaborators": 5,
-                "group_id": None
+                "shared_group_id": None
             }
         }
 
@@ -60,12 +60,12 @@ class ProjectUpdate(BaseModel):
     max_collaborators: Optional[int] = Field(None, ge=1, le=100)
     start_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
-    group_id: Optional[int] = Field(None, description="Optional group to associate with")
+    shared_group_id: Optional[str] = Field(None, description="Optional shared group to associate with")
 
 
 class ProjectCollaboratorInfo(BaseModel):
     """Schema for project collaborator information."""
-    user_id: int
+    user_id: str
     username: str
     role: str
     joined_at: datetime
@@ -75,9 +75,9 @@ class ProjectCollaboratorInfo(BaseModel):
 
 class ProjectResponse(ProjectBase):
     """Schema for project response."""
-    id: int
-    owner_id: int
-    group_id: Optional[int]
+    id: str
+    owner_id: str
+    shared_group_id: Optional[str]
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime]
@@ -98,12 +98,12 @@ class ProjectResponse(ProjectBase):
 
 class ProjectListResponse(BaseModel):
     """Schema for project list response."""
-    id: int
+    id: str
     name: str
     description: Optional[str]
     project_type: ProjectType
     status: ProjectStatus
-    owner_id: int
+    owner_id: str
     collaborator_count: int
     task_count: int
     completion_percentage: float
@@ -116,7 +116,7 @@ class ProjectListResponse(BaseModel):
 
 class ProjectInvitation(BaseModel):
     """Schema for project invitation."""
-    project_id: int
+    project_id: str
     user_email: str = Field(..., description="Email of user to invite")
     role: str = Field("collaborator", description="Role for the invited user")
     message: Optional[str] = Field(None, description="Optional invitation message")
@@ -124,7 +124,7 @@ class ProjectInvitation(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "project_id": 1,
+                "project_id": "123e4567-e89b-12d3-a456-426614174000",
                 "user_email": "friend@email.com",
                 "role": "collaborator",
                 "message": "Join me in organizing our ADHD-friendly workspace!"
@@ -134,13 +134,13 @@ class ProjectInvitation(BaseModel):
 
 class ProjectJoinRequest(BaseModel):
     """Schema for joining a public project."""
-    project_id: int
+    project_id: str
     message: Optional[str] = Field(None, description="Optional message to project owner")
     
     class Config:
         json_schema_extra = {
             "example": {
-                "project_id": 1,
+                "project_id": "123e4567-e89b-12d3-a456-426614174000",
                 "message": "I'd love to help with this ADHD organization project!"
             }
         }

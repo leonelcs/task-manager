@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models.project import Project, ProjectCollaboration
 from app.models.task import Task
 from app.models.user import User
-from app.models.group import Group, GroupMembership
+from app.models.group import SharedGroup, SharedGroupMembership
 from app.routers.auth import get_current_user
 from app.schemas.project import (
     ProjectCreate, ProjectUpdate, ProjectResponse, ProjectListResponse,
@@ -114,7 +114,7 @@ async def create_project(
         project_type=project.project_type,
         status=project.status,
         owner_id=current_user.id,
-        group_id=project.group_id,
+        shared_group_id=project.shared_group_id,
         is_active=True,
         is_public_joinable=project.is_public_joinable,
         max_collaborators=project.max_collaborators,
@@ -156,7 +156,7 @@ async def create_project(
         project_type=new_project.project_type,
         status=new_project.status,
         owner_id=new_project.owner_id,
-        group_id=new_project.group_id,
+        shared_group_id=new_project.shared_group_id,
         is_active=new_project.is_active,
         is_public_joinable=new_project.is_public_joinable,
         max_collaborators=new_project.max_collaborators,
@@ -174,7 +174,7 @@ async def create_project(
 
 @router.get("/{project_id}", response_model=ProjectResponse, summary="Get project details")
 async def get_project(
-    project_id: int,
+    project_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -222,7 +222,7 @@ async def get_project(
         project_type=project.project_type,
         status=project.status,
         owner_id=project.owner_id,
-        group_id=project.group_id,
+        shared_group_id=project.shared_group_id,
         is_active=project.is_active,
         is_public_joinable=project.is_public_joinable,
         max_collaborators=project.max_collaborators,
@@ -240,7 +240,7 @@ async def get_project(
 
 @router.put("/{project_id}", response_model=ProjectResponse, summary="Update project")
 async def update_project(
-    project_id: int, 
+    project_id: str, 
     project_update: ProjectUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -274,18 +274,18 @@ async def update_project(
     if not has_permission:
         raise HTTPException(status_code=403, detail="You don't have permission to update this project")
     
-    # Validate group access if group_id is being updated
-    if project_update.group_id is not None:
-        if project_update.group_id != 0:  # 0 means remove group association
-            group = db.query(Group).filter(Group.id == project_update.group_id).first()
+    # Validate group access if shared_group_id is being updated
+    if project_update.shared_group_id is not None:
+        if project_update.shared_group_id != 0:  # 0 means remove group association
+            group = db.query(SharedGroup).filter(SharedGroup.id == project_update.shared_group_id).first()
             if not group:
                 raise HTTPException(status_code=404, detail="Group not found")
             
             # Check if user is a member of the group
-            group_membership = db.query(GroupMembership).filter(
-                GroupMembership.group_id == project_update.group_id,
-                GroupMembership.user_id == current_user.id,
-                GroupMembership.is_active == True
+            group_membership = db.query(SharedGroupMembership).filter(
+                SharedGroupMembership.shared_group_id == project_update.shared_group_id,
+                SharedGroupMembership.user_id == current_user.id,
+                SharedGroupMembership.is_active == True
             ).first()
             
             if not group_membership:
@@ -307,8 +307,8 @@ async def update_project(
         project.start_date = project_update.start_date
     if project_update.due_date is not None:
         project.due_date = project_update.due_date
-    if project_update.group_id is not None:
-        project.group_id = project_update.group_id if project_update.group_id != 0 else None
+    if project_update.shared_group_id is not None:
+        project.shared_group_id = project_update.shared_group_id if project_update.shared_group_id != 0 else None
     if project_update.is_public_joinable is not None:
         project.is_public_joinable = project_update.is_public_joinable
     if project_update.max_collaborators is not None:
@@ -340,7 +340,7 @@ async def update_project(
         project_type=project.project_type,
         status=project.status,
         owner_id=project.owner_id,
-        group_id=project.group_id,
+        shared_group_id=project.shared_group_id,
         is_active=project.is_active,
         is_public_joinable=project.is_public_joinable,
         max_collaborators=project.max_collaborators,
@@ -358,7 +358,7 @@ async def update_project(
 
 @router.post("/{project_id}/invite", summary="Invite user to project")
 async def invite_to_project(
-    project_id: int, 
+    project_id: str, 
     invitation: ProjectInvitation,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -463,7 +463,7 @@ async def invite_to_project(
     }
 
 @router.post("/{project_id}/join", summary="Join a public project")
-async def join_public_project(project_id: int, join_request: ProjectJoinRequest):
+async def join_public_project(project_id: str, join_request: ProjectJoinRequest):
     """
     Join a public project with ADHD-friendly onboarding.
     """
@@ -486,7 +486,7 @@ async def join_public_project(project_id: int, join_request: ProjectJoinRequest)
 
 @router.get("/{project_id}/collaborators", summary="Get project collaborators")
 async def get_project_collaborators(
-    project_id: int,
+    project_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -634,7 +634,7 @@ async def discover_public_projects(
 
 @router.delete("/{project_id}", summary="Delete project")
 async def delete_project(
-    project_id: int,
+    project_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):

@@ -1,29 +1,29 @@
 """
-Groups router for ADHD Task Manager collaborative features.
+SharedGroups router for ADHD Task Manager collaborative features.
 """
 from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from app.database import get_db
-from app.models.group import Group, GroupMembership
+from app.models.group import SharedGroup, SharedGroupMembership
 from app.models.project import Project
 from app.models.user import User
 from app.routers.auth import get_current_user
 from app.schemas.group import (
-    GroupCreate, GroupUpdate, GroupResponse, GroupListResponse,
-    GroupInvitation, GroupMembershipUpdate, GroupRole
+    SharedGroupCreate, SharedGroupUpdate, SharedGroupResponse, SharedGroupListResponse,
+    SharedGroupInvitation, SharedGroupMembershipUpdate, SharedGroupRole
 )
 
 router = APIRouter()
 
-@router.get("/", response_model=List[GroupListResponse], summary="Get user's groups")
-async def get_groups(
-    limit: int = Query(20, ge=1, le=100, description="Number of groups to return"),
+@router.get("/", response_model=List[SharedGroupListResponse], summary="Get user's shared groups")
+async def get_shared_groups(
+    limit: int = Query(20, ge=1, le=100, description="Number of shared groups to return"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Get user's groups with ADHD-friendly presentation.
+    Get user's shared groups with ADHD-friendly presentation.
     
     **ADHD Features:**
     - Limited results to prevent overwhelm
@@ -31,57 +31,45 @@ async def get_groups(
     - Activity indicators for engagement
     - Supportive group atmosphere
     """
-    # Get groups where user is a member
-    user_groups = db.query(Group).join(GroupMembership).filter(
-        GroupMembership.user_id == current_user.id,
-        GroupMembership.is_active == True
+    # Get shared groups where user is a member
+    user_shared_groups = db.query(SharedGroup).join(SharedGroupMembership).filter(
+        SharedGroupMembership.user_id == current_user.id,
+        SharedGroupMembership.is_active == True
     ).limit(limit).all()
     
-    group_responses = []
-    for group in user_groups:
+    shared_group_responses = []
+    for shared_group in user_shared_groups:
         # Count members
-        member_count = db.query(GroupMembership).filter(
-            GroupMembership.group_id == group.id,
-            GroupMembership.is_active == True
+        member_count = db.query(SharedGroupMembership).filter(
+            SharedGroupMembership.shared_group_id == shared_group.id,
+            SharedGroupMembership.is_active == True
         ).count()
         
         # Count associated projects
-        project_count = db.query(Project).filter(Project.group_id == group.id).count()
+        project_count = db.query(Project).filter(Project.shared_group_id == shared_group.id).count()
         
-        # Parse adhd_settings from JSON string
-        import json
-        adhd_settings = {}
-        try:
-            if group.adhd_settings:
-                adhd_settings = json.loads(group.adhd_settings)
-        except (json.JSONDecodeError, TypeError):
-            # Fallback to default settings if parsing fails
-            adhd_settings = {
-                "group_focus_sessions": True,
-                "shared_energy_tracking": False,
-                "group_dopamine_celebrations": True,
-                "collaborative_task_chunking": True,
-                "group_break_reminders": True,
-                "accountability_features": True
-            }
-        
-        group_responses.append(GroupListResponse(
-            id=group.id,
-            name=group.name,
-            description=group.description,
-            created_by=group.created_by,
+        shared_group_responses.append(SharedGroupListResponse(
+            id=shared_group.id,
+            name=shared_group.name,
+            description=shared_group.description,
+            created_by=shared_group.created_by,
             member_count=member_count,
             project_count=project_count,
-            is_active=group.is_active,
-            created_at=group.created_at,
-            adhd_settings=adhd_settings
+            is_active=shared_group.is_active,
+            created_at=shared_group.created_at,
+            group_focus_sessions=shared_group.group_focus_sessions,
+            shared_energy_tracking=shared_group.shared_energy_tracking,
+            group_dopamine_celebrations=shared_group.group_dopamine_celebrations,
+            collaborative_task_chunking=shared_group.collaborative_task_chunking,
+            group_break_reminders=shared_group.group_break_reminders,
+            accountability_features=shared_group.accountability_features
         ))
     
-    return group_responses
+    return shared_group_responses
 
-@router.post("/", response_model=GroupResponse, summary="Create a new group")
-async def create_group(
-    group: GroupCreate,
+@router.post("/", response_model=SharedGroupResponse, summary="Create a new shared group")
+async def create_shared_group(
+    shared_group: SharedGroupCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -94,128 +82,113 @@ async def create_group(
     - Group dopamine celebrations
     - Collaborative task management
     """
-    # Create new group in database
-    new_group = Group(
-        name=group.name,
-        description=group.description,
+    # Create new shared group in database
+    new_shared_group = SharedGroup(
+        name=shared_group.name,
+        description=shared_group.description,
         created_by=current_user.id,
         is_active=True,
-        adhd_settings=str(group.adhd_settings) if group.adhd_settings else """{
-            "group_focus_sessions": true,
-            "shared_energy_tracking": false,
-            "group_dopamine_celebrations": true,
-            "collaborative_task_chunking": true,
-            "group_break_reminders": true,
-            "accountability_features": true
-        }"""
+        group_focus_sessions=shared_group.group_focus_sessions,
+        shared_energy_tracking=shared_group.shared_energy_tracking,
+        group_dopamine_celebrations=shared_group.group_dopamine_celebrations,
+        collaborative_task_chunking=shared_group.collaborative_task_chunking,
+        group_break_reminders=shared_group.group_break_reminders,
+        accountability_features=shared_group.accountability_features
     )
     
-    db.add(new_group)
+    db.add(new_shared_group)
     db.commit()
-    db.refresh(new_group)
+    db.refresh(new_shared_group)
     
-    # Add creator as owner of the group
-    membership = GroupMembership(
-        group_id=new_group.id,
+    # Add creator as owner of the shared group
+    membership = SharedGroupMembership(
+        shared_group_id=new_shared_group.id,
         user_id=current_user.id,
-        role=GroupRole.OWNER,
+        role=SharedGroupRole.OWNER,
         is_active=True
     )
     
     db.add(membership)
     db.commit()
     
-    return GroupResponse(
-        id=new_group.id,
-        name=new_group.name,
-        description=new_group.description,
-        created_by=new_group.created_by,
-        is_active=new_group.is_active,
-        created_at=new_group.created_at,
-        updated_at=new_group.updated_at,
-        adhd_settings=group.adhd_settings or {
-            "group_focus_sessions": True,
-            "shared_energy_tracking": False,
-            "group_dopamine_celebrations": True,
-            "collaborative_task_chunking": True,
-            "group_break_reminders": True,
-            "accountability_features": True
-        },
+    return SharedGroupResponse(
+        id=new_shared_group.id,
+        name=new_shared_group.name,
+        description=new_shared_group.description,
+        created_by=new_shared_group.created_by,
+        is_active=new_shared_group.is_active,
+        created_at=new_shared_group.created_at,
+        updated_at=new_shared_group.updated_at,
+        group_focus_sessions=new_shared_group.group_focus_sessions,
+        shared_energy_tracking=new_shared_group.shared_energy_tracking,
+        group_dopamine_celebrations=new_shared_group.group_dopamine_celebrations,
+        collaborative_task_chunking=new_shared_group.collaborative_task_chunking,
+        group_break_reminders=new_shared_group.group_break_reminders,
+        accountability_features=new_shared_group.accountability_features,
         member_count=1,
         project_count=0
     )
 
-@router.get("/{group_id}", response_model=GroupResponse, summary="Get group details")
-async def get_group(
-    group_id: int,
+@router.get("/{shared_group_id}", response_model=SharedGroupResponse, summary="Get shared group details")
+async def get_shared_group(
+    shared_group_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Get detailed group information with ADHD-specific features and member activity.
+    Get detailed shared group information with ADHD-specific features and member activity.
     """
-    # Get group from database
-    group = db.query(Group).filter(Group.id == group_id).first()
+    # Get shared group from database
+    shared_group = db.query(SharedGroup).filter(SharedGroup.id == shared_group_id).first()
     
-    if not group:
-        raise HTTPException(status_code=404, detail="Group not found")
+    if not shared_group:
+        raise HTTPException(status_code=404, detail="Shared group not found")
     
-    # Check if user is a member of this group
-    membership = db.query(GroupMembership).filter(
-        GroupMembership.group_id == group_id,
-        GroupMembership.user_id == current_user.id,
-        GroupMembership.is_active == True
+    # Check if user is a member of this shared group
+    membership = db.query(SharedGroupMembership).filter(
+        SharedGroupMembership.shared_group_id == shared_group_id,
+        SharedGroupMembership.user_id == current_user.id,
+        SharedGroupMembership.is_active == True
     ).first()
     
     if not membership:
-        raise HTTPException(status_code=403, detail="Access denied to this group")
+        raise HTTPException(status_code=403, detail="Access denied to this shared group")
     
     # Calculate computed fields
-    member_count = db.query(GroupMembership).filter(
-        GroupMembership.group_id == group.id,
-        GroupMembership.is_active == True
+    member_count = db.query(SharedGroupMembership).filter(
+        SharedGroupMembership.shared_group_id == shared_group.id,
+        SharedGroupMembership.is_active == True
     ).count()
     
-    project_count = db.query(Project).filter(Project.group_id == group.id).count()
+    project_count = db.query(Project).filter(Project.shared_group_id == shared_group.id).count()
     
-    # Parse adhd_settings if it's a string
-    import json
-    adhd_settings = {}
-    if group.adhd_settings:
-        try:
-            adhd_settings = json.loads(group.adhd_settings) if isinstance(group.adhd_settings, str) else group.adhd_settings
-        except json.JSONDecodeError:
-            adhd_settings = {
-                "group_focus_sessions": True,
-                "shared_energy_tracking": False,
-                "group_dopamine_celebrations": True,
-                "collaborative_task_chunking": True,
-                "group_break_reminders": True,
-                "accountability_features": True
-            }
-    
-    return GroupResponse(
-        id=group.id,
-        name=group.name,
-        description=group.description,
-        created_by=group.created_by,
-        is_active=group.is_active,
-        created_at=group.created_at,
-        updated_at=group.updated_at,
-        adhd_settings=adhd_settings,
+    return SharedGroupResponse(
+        id=shared_group.id,
+        name=shared_group.name,
+        description=shared_group.description,
+        created_by=shared_group.created_by,
+        is_active=shared_group.is_active,
+        created_at=shared_group.created_at,
+        updated_at=shared_group.updated_at,
+        group_focus_sessions=shared_group.group_focus_sessions,
+        shared_energy_tracking=shared_group.shared_energy_tracking,
+        group_dopamine_celebrations=shared_group.group_dopamine_celebrations,
+        collaborative_task_chunking=shared_group.collaborative_task_chunking,
+        group_break_reminders=shared_group.group_break_reminders,
+        accountability_features=shared_group.accountability_features,
         member_count=member_count,
         project_count=project_count
     )
 
-@router.put("/{group_id}", response_model=GroupResponse, summary="Update group")
-async def update_group(
-    group_id: int, 
-    group_update: GroupUpdate,
+@router.put("/{shared_group_id}", response_model=SharedGroupResponse, summary="Update shared group")
+async def update_shared_group(
+    shared_group_id: str, 
+    shared_group_update: SharedGroupUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Update group settings with ADHD-friendly change management.
+    Update shared group settings with ADHD-friendly change management.
     
     **ADHD Features:**
     - Gentle notification of changes
@@ -223,76 +196,76 @@ async def update_group(
     - Continuity of support structures
     - Motivation preservation
     """
-    # Get the group from database
-    group = db.query(Group).filter(Group.id == group_id).first()
+    # Get the shared group from database
+    shared_group = db.query(SharedGroup).filter(SharedGroup.id == shared_group_id).first()
     
-    if not group:
-        raise HTTPException(status_code=404, detail="Group not found")
+    if not shared_group:
+        raise HTTPException(status_code=404, detail="Shared group not found")
     
-    # Check if user has permission to update this group
-    membership = db.query(GroupMembership).filter(
-        GroupMembership.group_id == group_id,
-        GroupMembership.user_id == current_user.id,
-        GroupMembership.role.in_([GroupRole.OWNER, GroupRole.ADMIN]),
-        GroupMembership.is_active == True
+    # Check if user has permission to update this shared group
+    membership = db.query(SharedGroupMembership).filter(
+        SharedGroupMembership.shared_group_id == shared_group_id,
+        SharedGroupMembership.user_id == current_user.id,
+        SharedGroupMembership.role.in_([SharedGroupRole.OWNER, SharedGroupRole.ADMIN]),
+        SharedGroupMembership.is_active == True
     ).first()
     
     if not membership:
-        raise HTTPException(status_code=403, detail="You don't have permission to update this group")
+        raise HTTPException(status_code=403, detail="You don't have permission to update this shared group")
     
-    # Update group fields
-    if group_update.name is not None:
-        group.name = group_update.name
-    if group_update.description is not None:
-        group.description = group_update.description
-    if group_update.adhd_settings is not None:
-        import json
-        group.adhd_settings = json.dumps(group_update.adhd_settings)
+    # Update shared group fields
+    if shared_group_update.name is not None:
+        shared_group.name = shared_group_update.name
+    if shared_group_update.description is not None:
+        shared_group.description = shared_group_update.description
+    # Update individual ADHD settings
+    if shared_group_update.group_focus_sessions is not None:
+        shared_group.group_focus_sessions = shared_group_update.group_focus_sessions
+    if shared_group_update.shared_energy_tracking is not None:
+        shared_group.shared_energy_tracking = shared_group_update.shared_energy_tracking
+    if shared_group_update.group_dopamine_celebrations is not None:
+        shared_group.group_dopamine_celebrations = shared_group_update.group_dopamine_celebrations
+    if shared_group_update.collaborative_task_chunking is not None:
+        shared_group.collaborative_task_chunking = shared_group_update.collaborative_task_chunking
+    if shared_group_update.group_break_reminders is not None:
+        shared_group.group_break_reminders = shared_group_update.group_break_reminders
+    if shared_group_update.accountability_features is not None:
+        shared_group.accountability_features = shared_group_update.accountability_features
     
     from datetime import datetime
-    group.updated_at = datetime.utcnow()
+    shared_group.updated_at = datetime.utcnow()
     
     db.commit()
-    db.refresh(group)
+    db.refresh(shared_group)
     
     # Calculate computed fields for response
-    member_count = db.query(GroupMembership).filter(
-        GroupMembership.group_id == group.id,
-        GroupMembership.is_active == True
+    member_count = db.query(SharedGroupMembership).filter(
+        SharedGroupMembership.shared_group_id == shared_group.id,
+        SharedGroupMembership.is_active == True
     ).count()
     
-    project_count = db.query(Project).filter(Project.group_id == group.id).count()
+    project_count = db.query(Project).filter(Project.shared_group_id == shared_group.id).count()
     
-    # Parse adhd_settings
-    adhd_settings = {}
-    if group.adhd_settings:
-        try:
-            adhd_settings = json.loads(group.adhd_settings) if isinstance(group.adhd_settings, str) else group.adhd_settings
-        except json.JSONDecodeError:
-            adhd_settings = {
-                "group_focus_sessions": True,
-                "shared_energy_tracking": False,
-                "group_dopamine_celebrations": True,
-                "collaborative_task_chunking": True,
-                "group_break_reminders": True,
-                "accountability_features": True
-            }
-    
-    return GroupResponse(
-        id=group.id,
-        name=group.name,
-        description=group.description,
-        created_by=group.created_by,
-        is_active=group.is_active,
-        created_at=group.created_at,
-        updated_at=group.updated_at,
-        adhd_settings=adhd_settings,
+    return SharedGroupResponse(
+        id=shared_group.id,
+        name=shared_group.name,
+        description=shared_group.description,
+        created_by=shared_group.created_by,
+        is_active=shared_group.is_active,
+        created_at=shared_group.created_at,
+        updated_at=shared_group.updated_at,
+        group_focus_sessions=shared_group.group_focus_sessions,
+        shared_energy_tracking=shared_group.shared_energy_tracking,
+        group_dopamine_celebrations=shared_group.group_dopamine_celebrations,
+        collaborative_task_chunking=shared_group.collaborative_task_chunking,
+        group_break_reminders=shared_group.group_break_reminders,
+        accountability_features=shared_group.accountability_features,
         member_count=member_count,
         project_count=project_count
     )
 
-@router.post("/{group_id}/invite", summary="Invite user to group")
-async def invite_to_group(group_id: int, invitation: GroupInvitation):
+@router.post("/{shared_group_id}/invite", summary="Invite user to shared group")
+async def invite_to_shared_group(shared_group_id: str, invitation: SharedGroupInvitation):
     """
     Invite a user to join an ADHD support group.
     
@@ -305,7 +278,7 @@ async def invite_to_group(group_id: int, invitation: GroupInvitation):
     return {
         "message": f"🎉 Invitation sent to {invitation.user_email}!",
         "invitation_details": {
-            "group_id": group_id,
+            "shared_group_id": shared_group_id,
             "recipient": invitation.user_email,
             "role": invitation.role,
             "expires_in": "7 days"
@@ -325,16 +298,16 @@ async def invite_to_group(group_id: int, invitation: GroupInvitation):
         ]
     }
 
-@router.get("/{group_id}/members", summary="Get group members")
-async def get_group_members(group_id: int):
+@router.get("/{shared_group_id}/members", summary="Get shared group members")
+async def get_shared_group_members(shared_group_id: str):
     """
-    Get group members with ADHD-friendly community overview.
+    Get shared group members with ADHD-friendly community overview.
     """
     mock_members = [
         {
-            "user_id": 1,
-            "username": "group_creator",
-            "role": GroupRole.OWNER,
+            "user_id": "123e4567-e89b-12d3-a456-426614174000",
+            "username": "shared_group_creator",
+            "role": SharedGroupRole.OWNER,
             "joined_at": "2025-06-01T10:00:00Z",
             "is_active": True,
             "member_settings": {
@@ -345,9 +318,9 @@ async def get_group_members(group_id: int):
             }
         },
         {
-            "user_id": 2,
+            "user_id": "456e7890-e12b-34c5-b678-901234567890",
             "username": "focus_buddy",
-            "role": GroupRole.MEMBER,
+            "role": SharedGroupRole.MEMBER,
             "joined_at": "2025-06-02T14:30:00Z",
             "is_active": True,
             "member_settings": {
@@ -358,9 +331,9 @@ async def get_group_members(group_id: int):
             }
         },
         {
-            "user_id": 3,
+            "user_id": "789e0123-e45f-67a8-9012-345678901234",
             "username": "adhd_champion",
-            "role": GroupRole.ADMIN,
+            "role": SharedGroupRole.ADMIN,
             "joined_at": "2025-06-03T09:15:00Z",
             "is_active": True,
             "member_settings": {
@@ -391,14 +364,14 @@ async def get_group_members(group_id: int):
         "community_message": "🌟 This group is thriving with mutual support and understanding!"
     }
 
-@router.put("/{group_id}/members/{user_id}", summary="Update member role or settings")
-async def update_group_member(
-    group_id: int, 
-    user_id: int, 
-    member_update: GroupMembershipUpdate
+@router.put("/{shared_group_id}/members/{user_id}", summary="Update member role or settings")
+async def update_shared_group_member(
+    shared_group_id: str, 
+    user_id: str, 
+    member_update: SharedGroupMembershipUpdate
 ):
     """
-    Update group member role or settings with ADHD-friendly change management.
+    Update shared group member role or settings with ADHD-friendly change management.
     """
     return {
         "message": f"🎯 Member {user_id} updated successfully!",
@@ -411,24 +384,24 @@ async def update_group_member(
         "support_message": "Continued support and understanding for all members"
     }
 
-@router.delete("/{group_id}/members/{user_id}", summary="Remove member from group")
-async def remove_group_member(group_id: int, user_id: int):
+@router.delete("/{shared_group_id}/members/{user_id}", summary="Remove member from shared group")
+async def remove_shared_group_member(shared_group_id: str, user_id: str):
     """
-    Remove a member from the group with ADHD-friendly handling.
+    Remove a member from the shared group with ADHD-friendly handling.
     """
     return {
-        "message": f"Member {user_id} removed from group {group_id}",
+        "message": f"Member {user_id} removed from shared group {shared_group_id}",
         "support_message": "🤝 We support everyone's journey, even when paths diverge",
         "adhd_tip": "💪 Group changes are natural - focus on those who remain committed"
     }
 
-@router.post("/{group_id}/join", summary="Join group (if public or invited)")
-async def join_group(group_id: int):
+@router.post("/{shared_group_id}/join", summary="Join shared group (if public or invited)")
+async def join_shared_group(shared_group_id: str):
     """
-    Join a group with ADHD-friendly onboarding.
+    Join a shared group with ADHD-friendly onboarding.
     """
     return {
-        "message": f"🚀 Welcome to group {group_id}!",
+        "message": f"🚀 Welcome to shared group {shared_group_id}!",
         "welcome_package": {
             "community_guidelines": [
                 "🤝 Support each other's ADHD journey",
@@ -437,8 +410,8 @@ async def join_group(group_id: int):
                 "💬 Communicate with kindness and understanding"
             ],
             "getting_started": [
-                "👋 Introduce yourself to the group",
-                "📋 Check out current group projects",
+                "👋 Introduce yourself to the shared group",
+                "📋 Check out current shared group projects",
                 "⚡ Join a focus session when you're ready",
                 "🎉 Share your first small win!"
             ],
@@ -449,18 +422,18 @@ async def join_group(group_id: int):
                 "Celebration of neurodivergent strengths"
             ]
         },
-        "group_energy": "🌟 The group is excited to have you!",
+        "group_energy": "🌟 The shared group is excited to have you!",
         "first_tip": "💡 Start small - even just saying hello makes a difference!"
     }
 
-@router.get("/{group_id}/focus-sessions", summary="Get group focus sessions")
-async def get_group_focus_sessions(
-    group_id: int,
+@router.get("/{shared_group_id}/focus-sessions", summary="Get shared group focus sessions")
+async def get_shared_group_focus_sessions(
+    shared_group_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Get group focus sessions and body doubling opportunities.
+    Get shared group focus sessions and body doubling opportunities.
     
     **ADHD Features:**
     - Virtual body doubling support
@@ -468,15 +441,15 @@ async def get_group_focus_sessions(
     - Energy synchronization
     - Collective motivation
     """
-    # Verify user is a member of the group
-    membership = db.query(GroupMembership).filter(
-        GroupMembership.group_id == group_id,
-        GroupMembership.user_id == current_user.id,
-        GroupMembership.is_active == True
+    # Verify user is a member of the shared group
+    membership = db.query(SharedGroupMembership).filter(
+        SharedGroupMembership.shared_group_id == shared_group_id,
+        SharedGroupMembership.user_id == current_user.id,
+        SharedGroupMembership.is_active == True
     ).first()
     
     if not membership:
-        raise HTTPException(status_code=403, detail="Access denied to this group")
+        raise HTTPException(status_code=403, detail="Access denied to this shared group")
     
     # For now, return a structure that indicates no sessions are scheduled
     # In the future, this would query a focus_sessions table
@@ -497,14 +470,14 @@ async def get_group_focus_sessions(
         "next_session_tip": "💡 Join even if you're not feeling 100% - group energy is contagious!"
     }
 
-@router.delete("/{group_id}", summary="Delete group")
-async def delete_group(
-    group_id: int,
+@router.delete("/{shared_group_id}", summary="Delete shared group")
+async def delete_shared_group(
+    shared_group_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Delete a group with ADHD-friendly confirmation and member notification.
+    Delete a shared group with ADHD-friendly confirmation and member notification.
     
     **ADHD Features:**
     - Clear confirmation process
@@ -512,64 +485,64 @@ async def delete_group(
     - Data preservation options
     - Gentle transition guidance
     """
-    # Get the group from database
-    group = db.query(Group).filter(Group.id == group_id).first()
+    # Get the shared group from database
+    shared_group = db.query(SharedGroup).filter(SharedGroup.id == shared_group_id).first()
     
-    if not group:
-        raise HTTPException(status_code=404, detail="Group not found")
+    if not shared_group:
+        raise HTTPException(status_code=404, detail="Shared group not found")
     
-    # Check if user has permission to delete this group (only owner can delete)
-    owner_membership = db.query(GroupMembership).filter(
-        GroupMembership.group_id == group_id,
-        GroupMembership.user_id == current_user.id,
-        GroupMembership.role == GroupRole.OWNER,
-        GroupMembership.is_active == True
+    # Check if user has permission to delete this shared group (only owner can delete)
+    owner_membership = db.query(SharedGroupMembership).filter(
+        SharedGroupMembership.shared_group_id == shared_group_id,
+        SharedGroupMembership.user_id == current_user.id,
+        SharedGroupMembership.role == SharedGroupRole.OWNER,
+        SharedGroupMembership.is_active == True
     ).first()
     
     if not owner_membership:
-        raise HTTPException(status_code=403, detail="Only the group owner can delete the group")
+        raise HTTPException(status_code=403, detail="Only the shared group owner can delete the shared group")
     
-    # Get group statistics before deletion
-    member_count = db.query(GroupMembership).filter(
-        GroupMembership.group_id == group.id,
-        GroupMembership.is_active == True
+    # Get shared group statistics before deletion
+    member_count = db.query(SharedGroupMembership).filter(
+        SharedGroupMembership.shared_group_id == shared_group.id,
+        SharedGroupMembership.is_active == True
     ).count()
     
-    project_count = db.query(Project).filter(Project.group_id == group.id).count()
+    project_count = db.query(Project).filter(Project.shared_group_id == shared_group.id).count()
     
     from datetime import datetime
     
     # Soft delete - mark as inactive instead of hard delete
-    group.is_active = False
-    group.updated_at = datetime.utcnow()
+    shared_group.is_active = False
+    shared_group.updated_at = datetime.utcnow()
     
     # Deactivate all memberships
-    db.query(GroupMembership).filter(
-        GroupMembership.group_id == group.id
+    db.query(SharedGroupMembership).filter(
+        SharedGroupMembership.shared_group_id == shared_group.id
     ).update({"is_active": False})
     
-    # Update associated projects to remove group association
-    db.query(Project).filter(Project.group_id == group.id).update({
-        "group_id": None,
+    # Update associated projects to remove shared group association
+    db.query(Project).filter(Project.shared_group_id == shared_group.id).update({
+        "shared_group_id": None,
         "updated_at": datetime.utcnow()
     })
     
     db.commit()
     
     return {
-        "message": f"🏠 Group '{group.name}' has been archived successfully",
-        "preservation_notice": "Group data has been preserved and can be restored if needed",
-        "member_notification": f"All {member_count} members have been notified of the group closure",
+        "message": f"🏠 Shared Group '{shared_group.name}' has been archived successfully",
+        "preservation_notice": "Shared group data has been preserved and can be restored if needed",
+        "member_notification": f"All {member_count} members have been notified of the shared group closure",
         "statistics": {
             "members_affected": member_count,
             "projects_updated": project_count,
-            "group_id": group_id
+            "shared_group_id": shared_group_id
         },
         "next_steps": [
             "📢 Consider messaging members individually for transition support",
-            "🤝 Encourage members to stay connected outside the group",
-            "🎯 Focus on your remaining active groups and projects",
-            "💡 Apply lessons learned to future group management"
+            "🤝 Encourage members to stay connected outside the shared group",
+            "🎯 Focus on your remaining active shared groups and projects",
+            "💡 Apply lessons learned to future shared group management"
         ],
-        "recovery_info": "Contact support within 30 days if you need to restore this group"
+        "recovery_info": "Contact support within 30 days if you need to restore this shared group"
     }

@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 import asyncio
 import time
 from app.routers import tasks, users, analytics, projects, groups, auth, invitations
@@ -44,9 +45,26 @@ except Exception as e:
     logger.error(f"❌ Failed to create database tables: {str(e)}")
     raise
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager for FastAPI application.
+    Handles startup and shutdown events.
+    """
+    # Startup
+    logger.info("🚀 ADHD Task Manager API startup complete!")
+    logger.info("💡 Remember: Every small step counts!")
+    
+    yield
+    
+    # Shutdown
+    logger.info("👋 ADHD Task Manager API shutting down...")
+    logger.info("✨ Great job on all the tasks completed today!")
+
 # Create FastAPI app with ADHD-focused metadata
 app = FastAPI(
     title="ADHD Task Manager API",
+    lifespan=lifespan,
     description="""
     A specialized task management API designed to support people with ADHD with collaborative features.
     
@@ -171,7 +189,7 @@ app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
-app.include_router(groups.router, prefix="/api/groups", tags=["groups"])
+app.include_router(groups.router, prefix="/api/shared-groups", tags=["shared-groups"])
 app.include_router(invitations.router, prefix="/api/invitations", tags=["invitations"])
 
 @app.get("/", tags=["root"])
@@ -203,19 +221,3 @@ async def health_check():
     Health check endpoint for monitoring.
     """
     return {"status": "healthy", "service": "adhd-task-manager-api"}
-
-@app.on_event("startup")
-async def startup_event():
-    """
-    Startup event handler.
-    """
-    logger.info("🚀 ADHD Task Manager API startup complete!")
-    logger.info("💡 Remember: Every small step counts!")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """
-    Shutdown event handler.
-    """
-    logger.info("👋 ADHD Task Manager API shutting down...")
-    logger.info("✨ Great job on all the tasks completed today!")

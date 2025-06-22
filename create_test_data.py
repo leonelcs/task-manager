@@ -8,7 +8,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app.database import SessionLocal
 from app.models.user import User
-from app.models.group import Group, GroupMembership
+from app.models.group import SharedGroup, SharedGroupMembership
 from sqlalchemy.exc import IntegrityError
 import json
 
@@ -34,23 +34,19 @@ def create_test_data():
 
         # Create test group if doesn't exist
         group_name = "ADHD Test Group"
-        existing_group = db.query(Group).filter(Group.name == group_name).first()
+        existing_group = db.query(SharedGroup).filter(SharedGroup.name == group_name).first()
         if not existing_group:
-            adhd_settings = {
-                "group_focus_sessions": True,
-                "shared_energy_tracking": True,
-                "group_dopamine_celebrations": True,
-                "collaborative_task_chunking": True,
-                "group_break_reminders": True,
-                "accountability_features": True
-            }
-            
-            test_group = Group(
+            test_group = SharedGroup(
                 name=group_name,
                 description="A test group for ADHD support and collaboration",
                 created_by=test_user.id,
                 is_active=True,
-                adhd_settings=json.dumps(adhd_settings)
+                group_focus_sessions=True,
+                shared_energy_tracking=True,
+                group_dopamine_celebrations=True,
+                collaborative_task_chunking=True,
+                group_break_reminders=True,
+                accountability_features=True
             )
             db.add(test_group)
             db.commit()
@@ -58,8 +54,8 @@ def create_test_data():
             print(f"Created test group: {test_group.name} (ID: {test_group.id})")
             
             # Add creator as group member
-            membership = GroupMembership(
-                group_id=test_group.id,
+            membership = SharedGroupMembership(
+                shared_group_id=test_group.id,
                 user_id=test_user.id,
                 role="owner",
                 is_active=True

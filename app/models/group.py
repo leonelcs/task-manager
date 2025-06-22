@@ -1,56 +1,56 @@
 """
-Group model for collaborative features in ADHD Task Manager.
+SharedGroup model for collaborative features in ADHD Task Manager.
 """
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.mysql import CHAR
 from app.database import Base
 import enum
+import uuid
 
 
-class GroupRole(str, enum.Enum):
+class SharedGroupRole(str, enum.Enum):
     OWNER = "owner"
     ADMIN = "admin"
     MEMBER = "member"
     VIEWER = "viewer"
 
 
-class Group(Base):
-    __tablename__ = "groups"
+class SharedGroup(Base):
+    __tablename__ = "shared_groups"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(CHAR(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(100), nullable=False, index=True)
     description = Column(Text)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
-    # ADHD-focused group settings
-    adhd_settings = Column("adhd_settings", Text, default="""{
-        "group_focus_sessions": true,
-        "shared_energy_tracking": false,
-        "group_dopamine_celebrations": true,
-        "collaborative_task_chunking": true,
-        "group_break_reminders": true,
-        "accountability_features": true
-    }""")
+    # ADHD-focused group settings as individual columns
+    group_focus_sessions = Column(Boolean, default=True)
+    shared_energy_tracking = Column(Boolean, default=False)
+    group_dopamine_celebrations = Column(Boolean, default=True)
+    collaborative_task_chunking = Column(Boolean, default=True)
+    group_break_reminders = Column(Boolean, default=True)
+    accountability_features = Column(Boolean, default=True)
     
     # Creator/owner of the group
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_by = Column(CHAR(36), ForeignKey("users.id"), nullable=False)
     
     # Relationships
     creator = relationship("User")
-    memberships = relationship("GroupMembership", back_populates="group")
-    projects = relationship("Project", back_populates="group")
+    memberships = relationship("SharedGroupMembership", back_populates="shared_group")
+    projects = relationship("Project", back_populates="shared_group")
 
 
-class GroupMembership(Base):
-    __tablename__ = "group_memberships"
+class SharedGroupMembership(Base):
+    __tablename__ = "shared_group_memberships"
     
     id = Column(Integer, primary_key=True, index=True)
-    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    role = Column(Enum(GroupRole), default=GroupRole.MEMBER)
+    shared_group_id = Column(CHAR(36), ForeignKey("shared_groups.id"), nullable=False)
+    user_id = Column(CHAR(36), ForeignKey("users.id"), nullable=False)
+    role = Column(Enum(SharedGroupRole), default=SharedGroupRole.MEMBER)
     joined_at = Column(DateTime(timezone=True), server_default=func.now())
     is_active = Column(Boolean, default=True)
     
@@ -63,5 +63,5 @@ class GroupMembership(Base):
     }""")
     
     # Relationships
-    group = relationship("Group", back_populates="memberships")
-    user = relationship("User", back_populates="group_memberships")
+    shared_group = relationship("SharedGroup", back_populates="memberships")
+    user = relationship("User", back_populates="shared_group_memberships")

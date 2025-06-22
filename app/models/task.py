@@ -4,6 +4,7 @@ Task model for ADHD Task Manager with project and collaboration support.
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Enum, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.mysql import CHAR
 from app.database import Base
 import enum
 
@@ -59,9 +60,9 @@ class Task(Base):
     impact_size = Column(Enum(ADHDImpactSize), default=ADHDImpactSize.PEBBLES)
     
     # Ownership and assignment
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    assigned_user_id = Column(Integer, ForeignKey("users.id"))
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
+    created_by = Column(CHAR(36), ForeignKey("users.id"), nullable=False)
+    assigned_user_id = Column(CHAR(36), ForeignKey("users.id"))
+    project_id = Column(CHAR(36), ForeignKey("projects.id"), nullable=True)
     
     # Time management
     estimated_duration = Column(Integer)  # minutes
@@ -100,7 +101,7 @@ class TaskComment(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(CHAR(36), ForeignKey("users.id"), nullable=False)
     
     content = Column(Text, nullable=False)
     comment_type = Column(String(20), default="comment")  # comment, support, celebration

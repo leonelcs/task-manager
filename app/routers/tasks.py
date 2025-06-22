@@ -199,7 +199,7 @@ async def create_task(
 
 @router.get("/{task_id}", response_model=TaskResponse, summary="Get a specific task")
 async def get_task(
-    task_id: int,
+    task_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -239,7 +239,7 @@ async def get_task(
 
 @router.put("/{task_id}/complete", summary="Mark task as completed")
 async def complete_task(
-    task_id: int, 
+    task_id: str, 
     completion_data: Optional[TaskComplete] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -326,7 +326,7 @@ async def complete_task(
 
 @router.put("/{task_id}", response_model=TaskResponse, summary="Update a task")
 async def update_task(
-    task_id: int,
+    task_id: str,
     task_update: TaskUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -395,7 +395,7 @@ async def update_task(
 
 @router.delete("/{task_id}", summary="Delete a task")
 async def delete_task(
-    task_id: int,
+    task_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):

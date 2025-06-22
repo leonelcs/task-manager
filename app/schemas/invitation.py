@@ -1,5 +1,5 @@
 """
-Pydantic schemas for Group Invitation entities.
+Pydantic schemas for Shared Group Invitation entities.
 """
 from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, Dict, Any
@@ -14,8 +14,8 @@ class InvitationStatus(str, Enum):
     EXPIRED = "expired"
 
 
-class GroupInvitationCreate(BaseModel):
-    """Schema for creating a group invitation."""
+class SharedGroupInvitationCreate(BaseModel):
+    """Schema for creating a shared group invitation."""
     invited_email: EmailStr = Field(..., description="Email of the person to invite")
     role: str = Field("member", description="Role for the invited user")
     message: Optional[str] = Field(None, description="Optional personal message")
@@ -30,14 +30,14 @@ class GroupInvitationCreate(BaseModel):
         }
 
 
-class GroupInvitationResponse(BaseModel):
-    """Schema for group invitation response."""
-    id: int
+class SharedGroupInvitationResponse(BaseModel):
+    """Schema for shared group invitation response."""
+    id: str
     token: str
-    group_id: int
+    shared_group_id: str
     invited_email: str
-    invited_user_id: Optional[int]
-    invited_by: int
+    invited_user_id: Optional[str]
+    invited_by: str
     role: str
     status: InvitationStatus
     message: Optional[str]
@@ -54,7 +54,7 @@ class GroupInvitationResponse(BaseModel):
         from_attributes = True
 
 
-class GroupInvitationAccept(BaseModel):
+class SharedGroupInvitationAccept(BaseModel):
     """Schema for accepting an invitation."""
     welcome_preferences: Optional[Dict[str, Any]] = Field(
         default={
@@ -66,9 +66,9 @@ class GroupInvitationAccept(BaseModel):
     )
 
 
-class GroupInvitationList(BaseModel):
+class SharedGroupInvitationList(BaseModel):
     """Schema for listing invitations."""
-    invitations: list[GroupInvitationResponse]
+    invitations: list[SharedGroupInvitationResponse]
     total: int
     pending_count: int
     

@@ -4,8 +4,10 @@ Project model for ADHD Task Manager with collaborative features.
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Enum, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.mysql import CHAR
 from app.database import Base
 import enum
+import uuid
 
 
 class ProjectType(str, enum.Enum):
@@ -25,15 +27,15 @@ class ProjectStatus(str, enum.Enum):
 class Project(Base):
     __tablename__ = "projects"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(CHAR(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(100), nullable=False, index=True)
     description = Column(Text)
     project_type = Column(Enum(ProjectType), default=ProjectType.PERSONAL)
     status = Column(Enum(ProjectStatus), default=ProjectStatus.PLANNING)
     
     # Ownership and collaboration
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)  # Optional group association
+    owner_id = Column(CHAR(36), ForeignKey("users.id"), nullable=False)
+    shared_group_id = Column(CHAR(36), ForeignKey("shared_groups.id"), nullable=True)  # Optional shared group association
     
     # Project settings
     is_active = Column(Boolean, default=True)
@@ -76,7 +78,7 @@ class Project(Base):
     
     # Relationships
     owner = relationship("User", back_populates="owned_projects")
-    group = relationship("Group", back_populates="projects")
+    shared_group = relationship("SharedGroup", back_populates="projects")
     tasks = relationship("Task", back_populates="project")
     collaborations = relationship("ProjectCollaboration", back_populates="project")
 
@@ -85,13 +87,13 @@ class ProjectCollaboration(Base):
     __tablename__ = "project_collaborations"
     
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    project_id = Column(CHAR(36), ForeignKey("projects.id"), nullable=False)
+    user_id = Column(CHAR(36), ForeignKey("users.id"), nullable=False)
     
     # Collaboration details
     role = Column(String(20), default="collaborator")  # collaborator, reviewer, observer
     joined_at = Column(DateTime(timezone=True), server_default=func.now())
-    invited_by = Column(Integer, ForeignKey("users.id"))
+    invited_by = Column(CHAR(36), ForeignKey("users.id"))
     is_active = Column(Boolean, default=True)
     
     # ADHD-specific collaboration settings

@@ -53,7 +53,7 @@ class TaskBase(BaseModel):
     impact_size: ADHDImpactSize = Field(ADHDImpactSize.PEBBLES, description="Rock/Pebbles/Sand classification")
     estimated_duration: Optional[int] = Field(None, ge=1, description="Estimated duration in minutes")
     due_date: Optional[Union[datetime, date, str]] = Field(None, description="Task due date")
-    project_id: Optional[int] = Field(None, description="Associated project ID")
+    project_id: Optional[str] = Field(None, description="Associated project ID")
     
     @validator('due_date', pre=True)
     def parse_due_date(cls, v):
@@ -82,7 +82,8 @@ class TaskCreate(TaskBase):
                 "complexity": "high",
                 "impact_size": "rock",
                 "estimated_duration": 180,
-                "due_date": "2025-06-20T17:00:00Z"
+                "due_date": "2025-06-20T17:00:00Z",
+                "project_id": "123e4567-e89b-12d3-a456-426614174000"
             }
         }
 
@@ -98,7 +99,7 @@ class TaskUpdate(BaseModel):
     impact_size: Optional[ADHDImpactSize] = None
     estimated_duration: Optional[int] = Field(None, ge=1)
     due_date: Optional[Union[datetime, date, str]] = None
-    project_id: Optional[int] = None
+    project_id: Optional[str] = None
     
     @validator('due_date', pre=True)
     def parse_due_date(cls, v):
@@ -118,8 +119,8 @@ class TaskResponse(TaskBase):
     """Schema for task response with full details."""
     id: int
     status: TaskStatus
-    created_by: int
-    assigned_user_id: Optional[int]
+    created_by: str
+    assigned_user_id: Optional[str]
     actual_duration: Optional[int]
     created_at: datetime
     updated_at: Optional[datetime]
