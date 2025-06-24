@@ -17,19 +17,29 @@ async def send_invitation_email(email_data: InvitationEmailData):
     """
     try:
         # Log the email content for development
-        logger.info("=" * 50)
-        logger.info("📧 GROUP INVITATION EMAIL")
-        logger.info("=" * 50)
+        logger.info("=" * 60)
+        logger.info("📧 GROUP INVITATION EMAIL (DEVELOPMENT MODE)")
+        logger.info("=" * 60)
         logger.info(f"To: {email_data.recipient_email}")
         logger.info(f"Subject: You're invited to join '{email_data.group_name}' - ADHD Support Group")
+        logger.info("")
+        logger.info("⚠️  IMPORTANT FOR DEVELOPMENT:")
+        logger.info(f"   Since email is not configured, the user should visit:")
+        logger.info(f"   🔗 {email_data.invitation_url}")
+        logger.info(f"   📧 Or check their invitations at: http://localhost:3000/invitations")
         logger.info("")
         logger.info("Email Content:")
         logger.info("-" * 30)
         
         email_content = generate_invitation_email_html(email_data)
-        logger.info(email_content)
+        logger.info(email_content[:500] + "..." if len(email_content) > 500 else email_content)
         
-        logger.info("=" * 50)
+        logger.info("=" * 60)
+        logger.info("💡 To enable real email sending:")
+        logger.info("   1. Configure SendGrid, Mailgun, or similar service")
+        logger.info("   2. Add email service credentials to environment")
+        logger.info("   3. Uncomment the email sending code below")
+        logger.info("=" * 60)
         
         # TODO: Integrate with actual email service
         # Example with SendGrid:

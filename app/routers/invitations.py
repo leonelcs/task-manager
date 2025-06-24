@@ -20,7 +20,7 @@ import json
 router = APIRouter()
 
 
-@router.post("/shared-groups/{shared_group_id}/invite", response_model=SharedGroupInvitationResponse)
+@router.post("/groups/{shared_group_id}/invite", response_model=SharedGroupInvitationResponse)
 async def invite_to_shared_group(
     shared_group_id: str,
     invitation_data: SharedGroupInvitationCreate,
@@ -142,6 +142,243 @@ async def invite_to_shared_group(
         group_name=group.name,
         group_description=group.description,
         inviter_name=current_user.full_name or current_user.email
+    )
+
+
+@router.get("/groups/{shared_group_id}", response_model=List[SharedGroupInvitationResponse])
+async def get_group_invitations(
+    shared_group_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all invitations for a shared group (for group admins/owners).
+    """
+    # Check if current user has permission to view invitations (owner or admin)
+    membership = db.query(SharedGroupMembership).filter(
+        SharedGroupMembership.shared_group_id == shared_group_id,
+        SharedGroupMembership.user_id == current_user.id,
+        SharedGroupMembership.role.in_([SharedGroupRole.OWNER, SharedGroupRole.ADMIN]),
+        SharedGroupMembership.is_active == True
+    ).first()
+    
+    if not membership:
+        raise HTTPException(
+            status_code=403, 
+            detail="Only group owners and admins can view invitations"
+        )
+    
+    # Get the group
+    group = db.query(SharedGroup).filter(SharedGroup.id == shared_group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    # Get all invitations for this group
+    invitations = db.query(SharedGroupInvitation).filter(
+        SharedGroupInvitation.shared_group_id == shared_group_id
+    ).order_by(SharedGroupInvitation.created_at.desc()).all()
+    
+    invitation_responses = []
+    for invitation in invitations:
+        # Get inviter details
+        inviter = db.query(User).filter(User.id == invitation.invited_by).first()
+        
+        invitation_responses.append(SharedGroupInvitationResponse(
+            id=invitation.id,
+            token=invitation.token,
+            shared_group_id=invitation.shared_group_id,
+            invited_email=invitation.invited_email,
+            invited_user_id=invitation.invited_user_id,
+            invited_by=invitation.invited_by,
+            role=invitation.role,
+            status=invitation.status,
+            message=invitation.message,
+            created_at=invitation.created_at,
+            expires_at=invitation.expires_at,
+            responded_at=invitation.responded_at,
+            group_name=group.name,
+            group_description=group.description,
+            inviter_name=inviter.full_name if inviter and inviter.full_name else inviter.email if inviter else None
+        ))
+    
+    return invitation_responses
+
+
+@router.post("/groups/{shared_group_id}/{invitation_id}/resend")
+async def resend_invitation(
+    shared_group_id: str,
+    invitation_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Resend a pending invitation.
+    """
+    # Check if current user has permission (owner or admin)
+    membership = db.query(SharedGroupMembership).filter(
+        SharedGroupMembership.shared_group_id == shared_group_id,
+        SharedGroupMembership.user_id == current_user.id,
+        SharedGroupMembership.role.in_([SharedGroupRole.OWNER, SharedGroupRole.ADMIN]),
+        SharedGroupMembership.is_active == True
+    ).first()
+    
+    if not membership:
+        raise HTTPException(
+            status_code=403, 
+            detail="Only group owners and admins can resend invitations"
+        )
+    
+    # Get the invitation
+    invitation = db.query(SharedGroupInvitation).filter(
+        SharedGroupInvitation.id == invitation_id,
+        SharedGroupInvitation.shared_group_id == shared_group_id,
+        SharedGroupInvitation.status == InvitationStatus.PENDING
+    ).first()
+    
+    if not invitation:
+        raise HTTPException(
+            status_code=404, 
+            detail="Invitation not found or not pending"
+        )
+    
+    # Get the group
+    group = db.query(SharedGroup).filter(SharedGroup.id == shared_group_id).first()
+    
+    # Check if invited user exists
+    invited_user = db.query(User).filter(User.email == invitation.invited_email).first()
+    
+    # Prepare email data
+    email_data = InvitationEmailData(
+        recipient_email=invitation.invited_email,
+        recipient_name=invited_user.full_name if invited_user else None,
+        group_name=group.name,
+        group_description=group.description,
+        inviter_name=current_user.full_name or current_user.email,
+        invitation_token=invitation.token,
+        invitation_message=invitation.message,
+        invitation_url=f"http://localhost:3000/invitations/{invitation.token}",
+        expires_at=invitation.expires_at
+    )
+    
+    # Build group features from individual ADHD settings
+    group_features = {
+        "group_focus_sessions": group.group_focus_sessions,
+        "shared_energy_tracking": group.shared_energy_tracking,
+        "group_dopamine_celebrations": group.group_dopamine_celebrations,
+        "collaborative_task_chunking": group.collaborative_task_chunking,
+        "group_break_reminders": group.group_break_reminders,
+        "accountability_features": group.accountability_features
+    }
+    email_data.group_features = group_features
+    
+    # Send invitation email in background
+    background_tasks.add_task(send_invitation_email, email_data)
+    
+    return {
+        "message": "Invitation resent successfully",
+        "invitation_id": invitation_id,
+        "invited_email": invitation.invited_email,
+        "note": "📧 The invitation email has been sent again. Please check your email (including spam folder)."
+    }
+
+
+@router.delete("/groups/{shared_group_id}/{invitation_id}")
+async def cancel_invitation(
+    shared_group_id: str,
+    invitation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Cancel a pending invitation.
+    """
+    # Check if current user has permission (owner or admin)
+    membership = db.query(SharedGroupMembership).filter(
+        SharedGroupMembership.shared_group_id == shared_group_id,
+        SharedGroupMembership.user_id == current_user.id,
+        SharedGroupMembership.role.in_([SharedGroupRole.OWNER, SharedGroupRole.ADMIN]),
+        SharedGroupMembership.is_active == True
+    ).first()
+    
+    if not membership:
+        raise HTTPException(
+            status_code=403, 
+            detail="Only group owners and admins can cancel invitations"
+        )
+    
+    # Get the invitation
+    invitation = db.query(SharedGroupInvitation).filter(
+        SharedGroupInvitation.id == invitation_id,
+        SharedGroupInvitation.shared_group_id == shared_group_id,
+        SharedGroupInvitation.status == InvitationStatus.PENDING
+    ).first()
+    
+    if not invitation:
+        raise HTTPException(
+            status_code=404, 
+            detail="Invitation not found or not pending"
+        )
+    
+    # Update invitation status to expired/cancelled
+    invitation.status = InvitationStatus.EXPIRED
+    invitation.responded_at = datetime.utcnow()
+    
+    db.commit()
+    
+    return {
+        "message": "Invitation cancelled successfully",
+        "invitation_id": invitation_id,
+        "invited_email": invitation.invited_email,
+        "note": "The invitation has been cancelled and can no longer be used."
+    }
+
+
+@router.get("/me", response_model=SharedGroupInvitationList)
+async def get_my_invitations(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all invitations for the current user.
+    """
+    invitations = db.query(SharedGroupInvitation).filter(
+        SharedGroupInvitation.invited_email == current_user.email
+    ).order_by(SharedGroupInvitation.created_at.desc()).all()
+    
+    invitation_responses = []
+    pending_count = 0
+    
+    for invitation in invitations:
+        # Get group and inviter details
+        group = db.query(SharedGroup).filter(SharedGroup.id == invitation.shared_group_id).first()
+        inviter = db.query(User).filter(User.id == invitation.invited_by).first()
+        
+        if invitation.status == InvitationStatus.PENDING:
+            pending_count += 1
+        
+        invitation_responses.append(SharedGroupInvitationResponse(
+            id=invitation.id,
+            token=invitation.token,
+            shared_group_id=invitation.shared_group_id,
+            invited_email=invitation.invited_email,
+            invited_user_id=invitation.invited_user_id,
+            invited_by=invitation.invited_by,
+            role=invitation.role,
+            status=invitation.status,
+            message=invitation.message,
+            created_at=invitation.created_at,
+            expires_at=invitation.expires_at,
+            responded_at=invitation.responded_at,
+            group_name=group.name if group else None,
+            group_description=group.description if group else None,
+            inviter_name=inviter.full_name if inviter and inviter.full_name else inviter.email if inviter else None
+        ))
+    
+    return SharedGroupInvitationList(
+        invitations=invitation_responses,
+        total=len(invitation_responses),
+        pending_count=pending_count
     )
 
 
@@ -324,49 +561,46 @@ async def decline_invitation(
     }
 
 
-@router.get("/users/me/invitations", response_model=SharedGroupInvitationList)
-async def get_my_invitations(
+@router.delete("/groups/{shared_group_id}/clear-pending")
+async def clear_pending_invitations(
+    shared_group_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Get all invitations for the current user.
+    Clear all pending invitations for a group (development/admin endpoint).
     """
-    invitations = db.query(SharedGroupInvitation).filter(
-        SharedGroupInvitation.invited_email == current_user.email
-    ).order_by(SharedGroupInvitation.created_at.desc()).all()
+    # Check if current user has permission (owner only for this operation)
+    membership = db.query(SharedGroupMembership).filter(
+        SharedGroupMembership.shared_group_id == shared_group_id,
+        SharedGroupMembership.user_id == current_user.id,
+        SharedGroupMembership.role == SharedGroupRole.OWNER,
+        SharedGroupMembership.is_active == True
+    ).first()
     
-    invitation_responses = []
-    pending_count = 0
+    if not membership:
+        raise HTTPException(
+            status_code=403, 
+            detail="Only group owners can clear pending invitations"
+        )
     
-    for invitation in invitations:
-        # Get group and inviter details
-        group = db.query(SharedGroup).filter(SharedGroup.id == invitation.shared_group_id).first()
-        inviter = db.query(User).filter(User.id == invitation.invited_by).first()
-        
-        if invitation.status == InvitationStatus.PENDING:
-            pending_count += 1
-        
-        invitation_responses.append(SharedGroupInvitationResponse(
-            id=invitation.id,
-            token=invitation.token,
-            shared_group_id=invitation.shared_group_id,
-            invited_email=invitation.invited_email,
-            invited_user_id=invitation.invited_user_id,
-            invited_by=invitation.invited_by,
-            role=invitation.role,
-            status=invitation.status,
-            message=invitation.message,
-            created_at=invitation.created_at,
-            expires_at=invitation.expires_at,
-            responded_at=invitation.responded_at,
-            group_name=group.name if group else None,
-            group_description=group.description if group else None,
-            inviter_name=inviter.full_name if inviter and inviter.full_name else inviter.email if inviter else None
-        ))
+    # Get all pending invitations for this group
+    pending_invitations = db.query(SharedGroupInvitation).filter(
+        SharedGroupInvitation.shared_group_id == shared_group_id,
+        SharedGroupInvitation.status == InvitationStatus.PENDING
+    ).all()
     
-    return SharedGroupInvitationList(
-        invitations=invitation_responses,
-        total=len(invitation_responses),
-        pending_count=pending_count
-    )
+    # Mark them as expired
+    cleared_count = 0
+    for invitation in pending_invitations:
+        invitation.status = InvitationStatus.EXPIRED
+        invitation.responded_at = datetime.utcnow()
+        cleared_count += 1
+    
+    db.commit()
+    
+    return {
+        "message": f"Cleared {cleared_count} pending invitations",
+        "cleared_count": cleared_count,
+        "note": "All pending invitations have been marked as expired. You can now send new invitations."
+    }

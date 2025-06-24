@@ -32,7 +32,7 @@ class SharedGroupInvitationCreate(BaseModel):
 
 class SharedGroupInvitationResponse(BaseModel):
     """Schema for shared group invitation response."""
-    id: str
+    id: int  # Changed from str to int to match the database model
     token: str
     shared_group_id: str
     invited_email: str
