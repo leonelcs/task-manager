@@ -21,7 +21,7 @@ router = APIRouter()
 
 @router.get("/", response_model=List[ProjectListResponse], summary="Get user's projects")
 async def get_projects(
-    project_type: Optional[ProjectType] = Query(None, description="Filter by project type"),
+    project_type: Optional[List[ProjectType]] = Query(None, description="Filter by project type(s). Can be a single type or list of types."),
     status: Optional[ProjectStatus] = Query(None, description="Filter by project status"),
     limit: int = Query(20, ge=1, le=100, description="Number of projects to return"),
     current_user: User = Depends(get_current_user),
@@ -35,27 +35,79 @@ async def get_projects(
     - Clear status-based organization
     - Project type categorization for focus
     - Progress indicators for motivation
+    
+    **Project Types:**
+    - personal: Projects owned by the user
+    - shared: Projects from groups the user belongs to or collaborative projects
+    - public: Public projects the user has joined
+    
+    **Default Behavior:**
+    - When no project_type is specified, returns only personal projects
+    - Use project_type=['personal','shared','public'] to get all projects
     """
-    # Build query for user's owned projects and collaborations
-    owned_query = db.query(Project).filter(Project.owner_id == current_user.id)
+    # Default to personal projects only if no type specified
+    if project_type is None:
+        project_type = [ProjectType.PERSONAL]
     
-    # Also get projects where user is a collaborator
-    collaborated_projects = db.query(Project).join(ProjectCollaboration).filter(
-        ProjectCollaboration.user_id == current_user.id,
-        ProjectCollaboration.is_active == True
-    )
+    # Ensure project_type is always a list
+    if not isinstance(project_type, list):
+        project_type = [project_type]
     
-    # Combine queries
-    query = owned_query.union(collaborated_projects)
+    # Build base queries for different project access types
+    project_queries = []
     
-    # Apply filters
-    if project_type:
-        query = query.filter(Project.project_type == project_type)
-    if status:
-        query = query.filter(Project.status == status)
+    # 1. Projects owned by the user
+    if ProjectType.PERSONAL in project_type or ProjectType.SHARED in project_type:
+        owned_query = db.query(Project).filter(Project.owner_id == current_user.id)
+        project_queries.append(owned_query)
     
-    # Get projects with computed fields
-    projects = query.limit(limit).all()
+    # 2. Projects where user is a direct collaborator
+    if ProjectType.SHARED in project_type or ProjectType.PUBLIC in project_type:
+        collaborated_projects = db.query(Project).join(ProjectCollaboration).filter(
+            ProjectCollaboration.user_id == current_user.id,
+            ProjectCollaboration.is_active == True
+        )
+        project_queries.append(collaborated_projects)
+    
+    # 3. Projects from groups where user is a member (for shared projects)
+    if ProjectType.SHARED in project_type:
+        # Get user's group memberships
+        user_groups = db.query(SharedGroupMembership.shared_group_id).filter(
+            SharedGroupMembership.user_id == current_user.id,
+            SharedGroupMembership.is_active == True
+        ).subquery()
+        
+        # Get projects associated with those groups
+        group_projects = db.query(Project).filter(
+            Project.shared_group_id.in_(user_groups)
+        )
+        project_queries.append(group_projects)
+    
+    # 4. Public projects that user has access to (only if they've joined them)
+    # Public projects are already covered by collaboration check above
+    
+    # Combine all queries
+    if not project_queries:
+        # Fallback to empty result if no valid project types
+        projects = []
+    else:
+        # Union all queries
+        combined_query = project_queries[0]
+        for query in project_queries[1:]:
+            combined_query = combined_query.union(query)
+        
+        # Apply project type filter to the combined results
+        combined_query = combined_query.filter(Project.project_type.in_(project_type))
+        
+        # Apply status filter if specified
+        if status:
+            combined_query = combined_query.filter(Project.status == status)
+        
+        # Apply additional filters for active projects
+        combined_query = combined_query.filter(Project.is_active == True)
+        
+        # Get projects with limit
+        projects = combined_query.limit(limit).all()
     
     # Convert to response format with computed fields
     project_responses = []
@@ -197,6 +249,16 @@ async def get_project(
             ProjectCollaboration.is_active == True
         ).first() is not None  # Collaborator
     )
+    
+    # Check group membership access for shared projects
+    if not has_access and project.shared_group_id:
+        group_membership = db.query(SharedGroupMembership).filter(
+            SharedGroupMembership.shared_group_id == project.shared_group_id,
+            SharedGroupMembership.user_id == current_user.id,
+            SharedGroupMembership.is_active == True
+        ).first()
+        if group_membership:
+            has_access = True
     
     if not has_access:
         raise HTTPException(status_code=403, detail="Access denied to this project")

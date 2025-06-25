@@ -146,10 +146,15 @@ class TaskListResponse(BaseModel):
     estimated_duration: Optional[int]
     due_date: Optional[datetime]
     created_at: datetime
+    project_id: Optional[str] = None
     
     # Key ADHD features for list view
     dopamine_reward: str = Field("🎉 Task completed!")
     energy_level_required: str = Field("medium")
+    
+    # Project information for organizing tasks
+    project_name: Optional[str] = None
+    project_type: Optional[str] = None  # "personal", "shared", "public"
     
     class Config:
         from_attributes = True

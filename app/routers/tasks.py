@@ -6,7 +6,8 @@ from datetime import datetime
 from app.database import get_db
 from app.models.task import Task, TaskPriority, TaskStatus, ADHDTaskType, ADHDImpactSize
 from app.models.user import User
-from app.models.project import Project
+from app.models.project import Project, ProjectCollaboration
+from app.models.group import SharedGroup, SharedGroupMembership
 from app.routers.auth import get_current_user
 from app.schemas.task import (
     TaskCreate, TaskUpdate, TaskResponse, TaskListResponse, TaskComplete,
@@ -30,66 +31,6 @@ async def get_impact_classification_guide():
     - **Sand**: Nice-to-have tasks that fill gaps but shouldn't dominate your schedule
     """
     return TaskImpactClassification()
-
-@router.get("/", response_model=List[TaskListResponse], summary="Get all tasks")
-async def get_tasks(
-    status: Optional[TaskStatus] = Query(None, description="Filter by task status"),
-    priority: Optional[TaskPriority] = Query(None, description="Filter by priority"),
-    task_type: Optional[ADHDTaskType] = Query(None, description="Filter by ADHD task type"),
-    impact_size: Optional[ADHDImpactSize] = Query(None, description="Filter by Rock/Pebbles/Sand classification"),
-    limit: int = Query(50, ge=1, le=100, description="Number of tasks to return"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Get all tasks with optional filtering including Rock/Pebbles/Sand classification.
-    
-    **ADHD-Friendly Features:**
-    - Limited results to prevent overwhelm
-    - Status-based filtering for focus
-    - Priority-based organization
-    - Task type categorization
-    - **NEW**: Rock/Pebbles/Sand impact classification for better prioritization
-    """
-    # Build query for user's tasks
-    query = db.query(Task).filter(Task.created_by == current_user.id)
-    
-    # Apply filters
-    if status:
-        query = query.filter(Task.status == status)
-    if priority:
-        query = query.filter(Task.priority == priority)
-    if task_type:
-        query = query.filter(Task.task_type == task_type)
-    if impact_size:
-        query = query.filter(Task.impact_size == impact_size)
-    
-    # Order by impact size, then by created_at desc
-    tasks = query.order_by(
-        Task.impact_size,
-        Task.created_at.desc()
-    ).limit(limit).all()
-    
-    # Convert to response format
-    task_responses = []
-    for task in tasks:
-        adhd_features = task.adhd_features or {}
-        task_responses.append(TaskListResponse(
-            id=task.id,
-            title=task.title,
-            description=task.description,
-            status=task.status,
-            priority=task.priority,
-            task_type=task.task_type,
-            impact_size=task.impact_size,
-            estimated_duration=task.estimated_duration,
-            created_at=task.created_at,
-            due_date=task.due_date,
-            dopamine_reward=adhd_features.get("dopamine_reward", "🎉 Task completed!"),
-            energy_level_required=adhd_features.get("energy_level_required", "medium")
-        ))
-    
-    return task_responses
 
 @router.post("/", response_model=TaskResponse, summary="Create a new task")
 async def create_task(
@@ -136,9 +77,45 @@ async def create_task(
         # Validate project_id if provided
         project = None
         if task.project_id:
-            project = db.query(Project).filter(Project.id == task.project_id, Project.owner_id == current_user.id).first()
+            # Check if user has access to this project through any of the access methods:
+            # 1. Project ownership
+            # 2. Direct collaboration
+            # 3. Group membership
+            
+            # Build access query similar to the GET projects logic
+            access_conditions = []
+            
+            # 1. User owns the project
+            ownership_query = db.query(Project).filter(
+                Project.id == task.project_id,
+                Project.owner_id == current_user.id
+            )
+            
+            # 2. User is a direct collaborator
+            collaboration_query = db.query(Project).join(ProjectCollaboration).filter(
+                Project.id == task.project_id,
+                ProjectCollaboration.user_id == current_user.id,
+                ProjectCollaboration.is_active == True,
+                ProjectCollaboration.project_id == Project.id
+            )
+            
+            # 3. User is a member of the project's shared group
+            user_groups = db.query(SharedGroupMembership.shared_group_id).filter(
+                SharedGroupMembership.user_id == current_user.id,
+                SharedGroupMembership.is_active == True
+            ).subquery()
+            
+            group_access_query = db.query(Project).filter(
+                Project.id == task.project_id,
+                Project.shared_group_id.in_(user_groups)
+            )
+            
+            # Combine all access queries
+            project_access_query = ownership_query.union(collaboration_query).union(group_access_query)
+            project = project_access_query.first()
+            
             if not project:
-                raise HTTPException(status_code=404, detail="Project not found or you are not the owner")
+                raise HTTPException(status_code=404, detail="Project not found or you don't have access to it")
         
         # Create new task
         db_task = Task(
@@ -197,223 +174,124 @@ async def create_task(
         focus_sessions=db_task.focus_sessions
     )
 
-@router.get("/{task_id}", response_model=TaskResponse, summary="Get a specific task")
-async def get_task(
-    task_id: str,
+@router.get("/", response_model=List[TaskListResponse], summary="Get all tasks")
+async def get_tasks(
+    status: Optional[TaskStatus] = Query(None, description="Filter by task status"),
+    priority: Optional[TaskPriority] = Query(None, description="Filter by priority"),
+    task_type: Optional[ADHDTaskType] = Query(None, description="Filter by ADHD task type"),
+    impact_size: Optional[ADHDImpactSize] = Query(None, description="Filter by Rock/Pebbles/Sand classification"),
+    limit: int = Query(50, ge=1, le=100, description="Number of tasks to return"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Get a specific task by ID with full ADHD support details including impact classification.
+    Get all tasks with optional filtering including Rock/Pebbles/Sand classification.
+    
+    **ADHD-Friendly Features:**
+    - Limited results to prevent overwhelm
+    - Status-based filtering for focus
+    - Priority-based organization
+    - Task type categorization
+    - **NEW**: Rock/Pebbles/Sand impact classification for better prioritization
+    - **UPDATED**: Includes tasks from projects you have access to through groups and collaboration
     """
-    task = db.query(Task).filter(
-        Task.id == task_id,
-        Task.created_by == current_user.id
-    ).first()
+    # Build comprehensive query for user's accessible tasks
+    task_queries = []
     
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+    # 1. Tasks created by the user (personal tasks)
+    personal_tasks = db.query(Task).filter(Task.created_by == current_user.id)
+    task_queries.append(personal_tasks)
     
-    return TaskResponse(
-        id=task.id,
-        title=task.title,
-        description=task.description,
-        task_type=task.task_type,
-        priority=task.priority,
-        status=task.status,
-        complexity=task.complexity,
-        impact_size=task.impact_size,
-        estimated_duration=task.estimated_duration,
-        due_date=task.due_date,
-        project_id=task.project_id,
-        created_by=task.created_by,
-        assigned_user_id=task.assigned_user_id,
-        actual_duration=task.actual_duration,
-        created_at=task.created_at,
-        updated_at=task.updated_at,
-        completed_at=task.completed_at,
-        adhd_features=task.adhd_features or {},
-        completion_history=task.completion_history or [],
-        focus_sessions=task.focus_sessions or []
+    # 2. Tasks from projects owned by the user
+    owned_project_tasks = db.query(Task).join(Project).filter(
+        Project.owner_id == current_user.id,
+        Task.project_id == Project.id
     )
-
-@router.put("/{task_id}/complete", summary="Mark task as completed")
-async def complete_task(
-    task_id: str, 
-    completion_data: Optional[TaskComplete] = None,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Mark a task as completed with ADHD-friendly celebration including impact-based rewards.
+    task_queries.append(owned_project_tasks)
     
-    **ADHD-Friendly Features:**
-    - Impact-specific dopamine rewards
-    - Progress tracking
-    - Streak counting
-    - Celebration messages tailored to Rock/Pebbles/Sand
-    """
-    # Get the task from database
-    task = db.query(Task).filter(
-        Task.id == task_id,
-        Task.created_by == current_user.id
-    ).first()
+    # 3. Tasks from projects where user is a direct collaborator
+    collaborated_project_tasks = db.query(Task).join(Project).join(ProjectCollaboration).filter(
+        ProjectCollaboration.user_id == current_user.id,
+        ProjectCollaboration.is_active == True,
+        Task.project_id == Project.id,
+        ProjectCollaboration.project_id == Project.id
+    )
+    task_queries.append(collaborated_project_tasks)
     
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+    # 4. Tasks from projects in groups where user is a member
+    user_groups = db.query(SharedGroupMembership.shared_group_id).filter(
+        SharedGroupMembership.user_id == current_user.id,
+        SharedGroupMembership.is_active == True
+    ).subquery()
     
-    if task.status == TaskStatus.COMPLETED:
-        return {"message": "Task is already completed!"}
+    group_project_tasks = db.query(Task).join(Project).filter(
+        Project.shared_group_id.in_(user_groups),
+        Task.project_id == Project.id
+    )
+    task_queries.append(group_project_tasks)
     
-    # Update task status
-    task.status = TaskStatus.COMPLETED
-    task.completed_at = datetime.utcnow()
+    # Combine all queries using union
+    if task_queries:
+        combined_query = task_queries[0]
+        for query in task_queries[1:]:
+            combined_query = combined_query.union(query)
+    else:
+        # Fallback to empty result
+        tasks = []
+        combined_query = None
     
-    if completion_data and completion_data.actual_duration:
-        task.actual_duration = completion_data.actual_duration
+    if combined_query is not None:
+        # Apply filters to the combined query
+        if status:
+            combined_query = combined_query.filter(Task.status == status)
+        if priority:
+            combined_query = combined_query.filter(Task.priority == priority)
+        if task_type:
+            combined_query = combined_query.filter(Task.task_type == task_type)
+        if impact_size:
+            combined_query = combined_query.filter(Task.impact_size == impact_size)
+        
+        # Order by impact size, then by created_at desc
+        tasks = combined_query.order_by(
+            Task.impact_size,
+            Task.created_at.desc()
+        ).limit(limit).all()
+    else:
+        tasks = []
     
-    # Update completion history
-    completion_history = task.completion_history or []
-    completion_entry = {
-        "date": task.completed_at.isoformat() if task.completed_at else None,
-        "completed": True,
-        "time_taken": completion_data.actual_duration if completion_data else None,
-        "notes": completion_data.completion_notes if completion_data else None
-    }
-    completion_history.append(completion_entry)
-    task.completion_history = completion_history
-    
-    db.commit()
-    db.refresh(task)
-    
-    # Generate impact-specific rewards
-    impact_rewards = {
-        ADHDImpactSize.ROCK: "🏔️ INCREDIBLE! You crushed a ROCK task! This is HUGE progress! 🚀",
-        ADHDImpactSize.PEBBLES: "⚡ Solid progress! Building great momentum! 💪",
-        ADHDImpactSize.SAND: "✨ Nice detail work! Every little bit adds up! 🌟"
-    }
-    
-    reward_message = impact_rewards.get(task.impact_size, "🎉 Task completed!")
-    
-    celebration_level = {
-        ADHDImpactSize.ROCK: "epic",
-        ADHDImpactSize.PEBBLES: "high", 
-        ADHDImpactSize.SAND: "medium"
-    }[task.impact_size]
-    
-    # Calculate user's current streak (simplified)
-    recent_completed_tasks = db.query(Task).filter(
-        Task.created_by == current_user.id,
-        Task.status == TaskStatus.COMPLETED
-    ).order_by(Task.completed_at.desc()).limit(10).all()
-    
-    current_streak = len([t for t in recent_completed_tasks if t.completed_at and 
-                         (task.completed_at - t.completed_at).days <= 1])
-    
-    return {
-        "message": f"🎉 Awesome! Task '{task.title}' completed!",
-        "impact_type": task.impact_size.value,
-        "dopamine_boost": reward_message,
-        "celebration_level": celebration_level,
-        "streak_info": {
-            "current_streak": current_streak,
-            "impact_streak": f"Great {task.impact_size.value} task completed!"
-        },
-        "next_suggestion": _get_post_completion_suggestion(task.impact_size.value),
-        "actual_duration": task.actual_duration,
-        "completion_notes": completion_data.completion_notes if completion_data else None
-    }
-
-@router.put("/{task_id}", response_model=TaskResponse, summary="Update a task")
-async def update_task(
-    task_id: str,
-    task_update: TaskUpdate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Update a task with ADHD-friendly features and impact classification.
-    
-    **ADHD-Friendly Features:**
-    - Change impact classification (Rock/Pebbles/Sand) as priorities shift
-    - Update dopamine rewards based on new impact size
-    - Adjust energy requirements and timing suggestions
-    - Maintain completion history and focus sessions
-    """
-    # Get the task from database
-    task = db.query(Task).filter(
-        Task.id == task_id,
-        Task.created_by == current_user.id
-    ).first()
-    
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    # Update task fields
-    update_data = task_update.dict(exclude_unset=True)
-    
-    for field, value in update_data.items():
-        if hasattr(task, field):
-            setattr(task, field, value)
-    
-    # Update ADHD features if impact size changed
-    if task_update.impact_size and task_update.impact_size != task.impact_size:
+    # Convert to response format
+    task_responses = []
+    for task in tasks:
         adhd_features = task.adhd_features or {}
-        adhd_features.update({
-            "dopamine_reward": _get_impact_based_reward(task_update.impact_size),
-            "energy_level_required": _determine_energy_from_impact(task_update.impact_size),
-            "best_time_of_day": _suggest_time_by_impact(task_update.impact_size),
-            "hyperfocus_risk": task_update.impact_size == ADHDImpactSize.ROCK
-        })
-        task.adhd_features = adhd_features
+        
+        # Get project information if task belongs to a project
+        project_name = None
+        project_type = None
+        if task.project_id:
+            project = db.query(Project).filter(Project.id == task.project_id).first()
+            if project:
+                project_name = project.name
+                project_type = project.project_type.value if project.project_type else None
+        
+        task_responses.append(TaskListResponse(
+            id=task.id,
+            title=task.title,
+            description=task.description,
+            status=task.status,
+            priority=task.priority,
+            task_type=task.task_type,
+            impact_size=task.impact_size,
+            estimated_duration=task.estimated_duration,
+            created_at=task.created_at,
+            due_date=task.due_date,
+            project_id=task.project_id,
+            project_name=project_name,
+            project_type=project_type,
+            dopamine_reward=adhd_features.get("dopamine_reward", "🎉 Task completed!"),
+            energy_level_required=adhd_features.get("energy_level_required", "medium")
+        ))
     
-    db.commit()
-    db.refresh(task)
-    
-    return TaskResponse(
-        id=task.id,
-        title=task.title,
-        description=task.description,
-        task_type=task.task_type,
-        priority=task.priority,
-        status=task.status,
-        complexity=task.complexity,
-        impact_size=task.impact_size,
-        estimated_duration=task.estimated_duration,
-        due_date=task.due_date,
-        project_id=task.project_id,
-        created_by=task.created_by,
-        assigned_user_id=task.assigned_user_id,
-        actual_duration=task.actual_duration,
-        created_at=task.created_at,
-        updated_at=task.updated_at,
-        completed_at=task.completed_at,
-        adhd_features=task.adhd_features or {},
-        completion_history=task.completion_history or [],
-        focus_sessions=task.focus_sessions or []
-    )
-
-@router.delete("/{task_id}", summary="Delete a task")
-async def delete_task(
-    task_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Delete a task. For ADHD users, sometimes removing overwhelming tasks is the right choice.
-    """
-    task = db.query(Task).filter(
-        Task.id == task_id,
-        Task.created_by == current_user.id
-    ).first()
-    
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    db.delete(task)
-    db.commit()
-    
-    return {"message": f"Task '{task.title}' has been deleted. Sometimes letting go is the right choice! ✨"}
+    return task_responses
 
 @router.get("/suggestions/impact-balance", response_model=List[TaskSuggestion], summary="Get balanced task suggestions")
 async def get_impact_balanced_suggestions(
@@ -558,6 +436,362 @@ async def get_daily_focus_recommendations(
     }
     
     return recommendations
+
+@router.get("/{task_id}", response_model=TaskResponse, summary="Get a specific task")
+async def get_task(
+    task_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get a specific task by ID with full ADHD support details including impact classification.
+    **UPDATED**: Includes tasks from projects you have access to through groups and collaboration.
+    """
+    # First, try to get the task
+    task = db.query(Task).filter(Task.id == task_id).first()
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    # Check if user has access to this task
+    has_access = False
+    
+    # 1. User created the task
+    if task.created_by == current_user.id:
+        has_access = True
+    
+    # 2. Task belongs to a project the user has access to
+    elif task.project_id:
+        project = db.query(Project).filter(Project.id == task.project_id).first()
+        if project:
+            # Check if user owns the project
+            if project.owner_id == current_user.id:
+                has_access = True
+            
+            # Check if user is a collaborator on the project
+            elif db.query(ProjectCollaboration).filter(
+                ProjectCollaboration.project_id == project.id,
+                ProjectCollaboration.user_id == current_user.id,
+                ProjectCollaboration.is_active == True
+            ).first():
+                has_access = True
+            
+            # Check if user has access through group membership
+            elif project.shared_group_id:
+                group_membership = db.query(SharedGroupMembership).filter(
+                    SharedGroupMembership.shared_group_id == project.shared_group_id,
+                    SharedGroupMembership.user_id == current_user.id,
+                    SharedGroupMembership.is_active == True
+                ).first()
+                if group_membership:
+                    has_access = True
+    
+    if not has_access:
+        raise HTTPException(status_code=403, detail="Access denied to this task")
+    
+    return TaskResponse(
+        id=task.id,
+        title=task.title,
+        description=task.description,
+        task_type=task.task_type,
+        priority=task.priority,
+        status=task.status,
+        complexity=task.complexity,
+        impact_size=task.impact_size,
+        estimated_duration=task.estimated_duration,
+        due_date=task.due_date,
+        project_id=task.project_id,
+        created_by=task.created_by,
+        assigned_user_id=task.assigned_user_id,
+        actual_duration=task.actual_duration,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+        completed_at=task.completed_at,
+        adhd_features=task.adhd_features or {},
+        completion_history=task.completion_history or [],
+        focus_sessions=task.focus_sessions or []
+    )
+
+@router.put("/{task_id}/complete", summary="Mark task as completed")
+async def complete_task(
+    task_id: str, 
+    completion_data: Optional[TaskComplete] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Mark a task as completed with ADHD-friendly celebration including impact-based rewards.
+    
+    **ADHD-Friendly Features:**
+    - Impact-specific dopamine rewards
+    - Progress tracking
+    - Streak counting
+    - Celebration messages tailored to Rock/Pebbles/Sand
+    **UPDATED**: Can complete tasks from projects you have access to through groups and collaboration.
+    """
+    # Get the task from database
+    task = db.query(Task).filter(Task.id == task_id).first()
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    # Check if user has access to complete this task (same logic as get_task)
+    has_access = False
+    
+    # 1. User created the task
+    if task.created_by == current_user.id:
+        has_access = True
+    
+    # 2. Task belongs to a project the user has access to
+    elif task.project_id:
+        project = db.query(Project).filter(Project.id == task.project_id).first()
+        if project:
+            # Check if user owns the project
+            if project.owner_id == current_user.id:
+                has_access = True
+            
+            # Check if user is a collaborator on the project
+            elif db.query(ProjectCollaboration).filter(
+                ProjectCollaboration.project_id == project.id,
+                ProjectCollaboration.user_id == current_user.id,
+                ProjectCollaboration.is_active == True
+            ).first():
+                has_access = True
+            
+            # Check if user has access through group membership
+            elif project.shared_group_id:
+                group_membership = db.query(SharedGroupMembership).filter(
+                    SharedGroupMembership.shared_group_id == project.shared_group_id,
+                    SharedGroupMembership.user_id == current_user.id,
+                    SharedGroupMembership.is_active == True
+                ).first()
+                if group_membership:
+                    has_access = True
+    
+    if not has_access:
+        raise HTTPException(status_code=403, detail="Access denied to this task")
+    
+    if task.status == TaskStatus.COMPLETED:
+        return {"message": "Task is already completed!"}
+    
+    # Update task status
+    task.status = TaskStatus.COMPLETED
+    task.completed_at = datetime.utcnow()
+    
+    if completion_data and completion_data.actual_duration:
+        task.actual_duration = completion_data.actual_duration
+    
+    # Update completion history
+    completion_history = task.completion_history or []
+    completion_entry = {
+        "date": task.completed_at.isoformat() if task.completed_at else None,
+        "completed": True,
+        "time_taken": completion_data.actual_duration if completion_data else None,
+        "notes": completion_data.completion_notes if completion_data else None
+    }
+    completion_history.append(completion_entry)
+    task.completion_history = completion_history
+    
+    db.commit()
+    db.refresh(task)
+    
+    # Generate impact-specific rewards
+    impact_rewards = {
+        ADHDImpactSize.ROCK: "🏔️ INCREDIBLE! You crushed a ROCK task! This is HUGE progress! 🚀",
+        ADHDImpactSize.PEBBLES: "⚡ Solid progress! Building great momentum! 💪",
+        ADHDImpactSize.SAND: "✨ Nice detail work! Every little bit adds up! 🌟"
+    }
+    
+    reward_message = impact_rewards.get(task.impact_size, "🎉 Task completed!")
+    
+    celebration_level = {
+        ADHDImpactSize.ROCK: "epic",
+        ADHDImpactSize.PEBBLES: "high", 
+        ADHDImpactSize.SAND: "medium"
+    }[task.impact_size]
+    
+    # Calculate user's current streak (simplified)
+    recent_completed_tasks = db.query(Task).filter(
+        Task.created_by == current_user.id,
+        Task.status == TaskStatus.COMPLETED
+    ).order_by(Task.completed_at.desc()).limit(10).all()
+    
+    current_streak = len([t for t in recent_completed_tasks if t.completed_at and 
+                         (task.completed_at - t.completed_at).days <= 1])
+    
+    return {
+        "message": f"🎉 Awesome! Task '{task.title}' completed!",
+        "impact_type": task.impact_size.value,
+        "dopamine_boost": reward_message,
+        "celebration_level": celebration_level,
+        "streak_info": {
+            "current_streak": current_streak,
+            "impact_streak": f"Great {task.impact_size.value} task completed!"
+        },
+        "next_suggestion": _get_post_completion_suggestion(task.impact_size.value),
+        "actual_duration": task.actual_duration,
+        "completion_notes": completion_data.completion_notes if completion_data else None
+    }
+
+@router.put("/{task_id}", response_model=TaskResponse, summary="Update a task")
+async def update_task(
+    task_id: str,
+    task_update: TaskUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update a task with ADHD-friendly features and impact classification.
+    
+    **ADHD-Friendly Features:**
+    - Change impact classification (Rock/Pebbles/Sand) as priorities shift
+    - Update dopamine rewards based on new impact size
+    - Adjust energy requirements and timing suggestions
+    - Maintain completion history and focus sessions
+    **UPDATED**: Can update tasks from projects you have access to through groups and collaboration.
+    """
+    # Get the task from database
+    task = db.query(Task).filter(Task.id == task_id).first()
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    # Check if user has access to update this task (same logic as get_task)
+    has_access = False
+    
+    # 1. User created the task
+    if task.created_by == current_user.id:
+        has_access = True
+    
+    # 2. Task belongs to a project the user has access to
+    elif task.project_id:
+        project = db.query(Project).filter(Project.id == task.project_id).first()
+        if project:
+            # Check if user owns the project
+            if project.owner_id == current_user.id:
+                has_access = True
+            
+            # Check if user is a collaborator on the project
+            elif db.query(ProjectCollaboration).filter(
+                ProjectCollaboration.project_id == project.id,
+                ProjectCollaboration.user_id == current_user.id,
+                ProjectCollaboration.is_active == True
+            ).first():
+                has_access = True
+            
+            # Check if user has access through group membership
+            elif project.shared_group_id:
+                group_membership = db.query(SharedGroupMembership).filter(
+                    SharedGroupMembership.shared_group_id == project.shared_group_id,
+                    SharedGroupMembership.user_id == current_user.id,
+                    SharedGroupMembership.is_active == True
+                ).first()
+                if group_membership:
+                    has_access = True
+    
+    if not has_access:
+        raise HTTPException(status_code=403, detail="Access denied to this task")
+    
+    # Update task fields
+    update_data = task_update.dict(exclude_unset=True)
+    
+    for field, value in update_data.items():
+        if hasattr(task, field):
+            setattr(task, field, value)
+    
+    # Update ADHD features if impact size changed
+    if task_update.impact_size and task_update.impact_size != task.impact_size:
+        adhd_features = task.adhd_features or {}
+        adhd_features.update({
+            "dopamine_reward": _get_impact_based_reward(task_update.impact_size),
+            "energy_level_required": _determine_energy_from_impact(task_update.impact_size),
+            "best_time_of_day": _suggest_time_by_impact(task_update.impact_size),
+            "hyperfocus_risk": task_update.impact_size == ADHDImpactSize.ROCK
+        })
+        task.adhd_features = adhd_features
+    
+    db.commit()
+    db.refresh(task)
+    
+    return TaskResponse(
+        id=task.id,
+        title=task.title,
+        description=task.description,
+        task_type=task.task_type,
+        priority=task.priority,
+        status=task.status,
+        complexity=task.complexity,
+        impact_size=task.impact_size,
+        estimated_duration=task.estimated_duration,
+        due_date=task.due_date,
+        project_id=task.project_id,
+        created_by=task.created_by,
+        assigned_user_id=task.assigned_user_id,
+        actual_duration=task.actual_duration,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+        completed_at=task.completed_at,
+        adhd_features=task.adhd_features or {},
+        completion_history=task.completion_history or [],
+        focus_sessions=task.focus_sessions or []
+    )
+
+@router.delete("/{task_id}", summary="Delete a task")
+async def delete_task(
+    task_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a task. For ADHD users, sometimes removing overwhelming tasks is the right choice.
+    **UPDATED**: Can delete tasks from projects you have access to through groups and collaboration.
+    """
+    # Get the task from database
+    task = db.query(Task).filter(Task.id == task_id).first()
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    # Check if user has access to delete this task (same logic as get_task)
+    has_access = False
+    
+    # 1. User created the task
+    if task.created_by == current_user.id:
+        has_access = True
+    
+    # 2. Task belongs to a project the user has access to
+    elif task.project_id:
+        project = db.query(Project).filter(Project.id == task.project_id).first()
+        if project:
+            # Check if user owns the project
+            if project.owner_id == current_user.id:
+                has_access = True
+            
+            # Check if user is a collaborator on the project
+            elif db.query(ProjectCollaboration).filter(
+                ProjectCollaboration.project_id == project.id,
+                ProjectCollaboration.user_id == current_user.id,
+                ProjectCollaboration.is_active == True
+            ).first():
+                has_access = True
+            
+            # Check if user has access through group membership
+            elif project.shared_group_id:
+                group_membership = db.query(SharedGroupMembership).filter(
+                    SharedGroupMembership.shared_group_id == project.shared_group_id,
+                    SharedGroupMembership.user_id == current_user.id,
+                    SharedGroupMembership.is_active == True
+                ).first()
+                if group_membership:
+                    has_access = True
+    
+    if not has_access:
+        raise HTTPException(status_code=403, detail="Access denied to this task")
+    
+    db.delete(task)
+    db.commit()
+    
+    return {"message": f"Task '{task.title}' has been deleted. Sometimes letting go is the right choice! ✨"}
 
 def _assess_task_balance(rock_count: int, pebbles_count: int, sand_count: int) -> Dict[str, str]:
     """Assess if the user's task distribution is ADHD-optimal."""
