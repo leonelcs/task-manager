@@ -91,7 +91,7 @@ run_migrations() {
 # Function to connect to MySQL
 connect_mysql() {
     print_status "Connecting to MySQL..."
-    docker-compose exec mysql mysql -u adhd_tasksmanager -p"My:S3cr3t" adhd_tasks_dev
+    docker-compose exec mysql mysql -u adhd_tasksmanager -p"TaskManager2024!" adhd_tasks_dev
 }
 
 # Function to test database connection

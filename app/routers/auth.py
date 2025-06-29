@@ -15,6 +15,7 @@ from app.utils.auth import (
     get_user_by_google_id,
     create_user_from_google
 )
+from app.utils.whitelist import is_email_whitelisted, get_whitelist_error_message
 from app.schemas.user import UserResponse, UserCreate
 from pydantic import BaseModel
 from typing import Optional
@@ -34,16 +35,23 @@ class LoginRequest(BaseModel):
     password: str
 
 @router.get("/google/login")
-async def google_login():
+async def google_login(request: Request):
     """
     Initiate Google OAuth login.
     Redirects to Google's OAuth consent screen.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"🔐 Starting Google OAuth login from {request.client.host if request.client else 'unknown'}")
+    logger.info(f"🔐 Redirect URI configured: {google_oauth_service.redirect_uri}")
+    
     try:
         # Generate state parameter for security
         state = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
         
         auth_url = google_oauth_service.get_auth_url(state=state)
+        logger.info(f"🔐 Generated auth URL: {auth_url}")
         
         return {
             "auth_url": auth_url,
@@ -71,24 +79,33 @@ async def google_callback(
     Handle Google OAuth callback.
     Exchange authorization code for user information and create/login user.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"🔐 Google OAuth callback received - code: {'present' if code else 'missing'}, error: {error}")
+    
     if error:
+        logger.error(f"❌ OAuth error received: {error}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"OAuth error: {error}"
         )
     
     if not code:
+        logger.error("❌ Authorization code not provided")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Authorization code not provided"
         )
     
     try:
+        logger.info("🔐 Exchanging code for token...")
         # Exchange code for token
         token_data = await google_oauth_service.exchange_code_for_token(code)
         access_token = token_data.get('access_token')
         
         if not access_token:
+            logger.error("❌ Failed to get access token from Google")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to get access token"
@@ -96,6 +113,16 @@ async def google_callback(
         
         # Get user info from Google
         google_user_info = await google_oauth_service.get_user_info(access_token)
+        
+        # Check if email is whitelisted for alpha release
+        if not is_email_whitelisted(google_user_info['email']):
+            logger.warning(f"🚫 Access denied for non-whitelisted email: {google_user_info['email']}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=get_whitelist_error_message()
+            )
+        
+        logger.info(f"✅ Email {google_user_info['email']} passed whitelist check")
         
         # Check if user already exists
         existing_user = get_user_by_google_id(db, google_user_info['id'])
@@ -143,6 +170,13 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     Traditional email/password login.
     """
     from app.utils.auth import authenticate_user
+    
+    # Check if email is whitelisted for alpha release
+    if not is_email_whitelisted(login_data.email):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=get_whitelist_error_message()
+        )
     
     user = authenticate_user(db, login_data.email, login_data.password)
     if not user:

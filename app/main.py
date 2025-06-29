@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
 import time
-from app.routers import tasks, users, analytics, projects, groups, auth, invitations
+from app.routers import tasks, users, analytics, projects, groups, auth, invitations, admin
 from app.database import create_tables
 import os
 import logging
@@ -191,6 +191,7 @@ app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"]
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(groups.router, prefix="/api/shared-groups", tags=["shared-groups"])
 app.include_router(invitations.router, prefix="/api/invitations", tags=["invitations"])
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 @app.get("/", tags=["root"])
 async def read_root():

@@ -41,5 +41,11 @@ class ProductionConfig(BaseConfig):
     # Security settings - these should be set via environment variables
     SECRET_KEY: str = os.getenv("SECRET_KEY", "")
     
+    # Alpha Release Configuration - IMPORTANT: Update for production
+    # Keep whitelist enabled for initial production deployment
+    ALPHA_WHITELIST_ENABLED: bool = True
+    # Override with environment variable in production
+    ALPHA_WHITELIST_EMAILS: str = os.getenv("ALPHA_WHITELIST_EMAILS", "leonelcs@gmail.com,beafurlan52@gmail.com")
+    
     class Config:
         env_file = ".env.production"

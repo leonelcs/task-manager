@@ -20,6 +20,11 @@ lib/
 lib64/
 pyvenv.cfg
 
+# Backup files
+*_backup/
+*.backup
+*backup*
+
 # Database files
 *.db
 *.sqlite

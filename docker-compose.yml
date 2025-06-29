@@ -10,7 +10,7 @@ services:
       MYSQL_ROOT_PASSWORD: rootpassword
       MYSQL_DATABASE: adhd_tasks_dev
       MYSQL_USER: adhd_tasksmanager
-      MYSQL_PASSWORD: "My:S3cr3t"
+      MYSQL_PASSWORD: "TaskManager2024!"
     ports:
       - "30306:3306"
     volumes:
@@ -34,7 +34,7 @@ services:
   #     - "8000:8000"
   #   environment:
   #     - ENVIRONMENT=local
-  #     - DATABASE_URL=mysql+pymysql://adhd_tasksmanager:My%3AS3cr3t@mysql:3306/adhd_tasks_dev
+  #     - DATABASE_URL=mysql+pymysql://adhd_tasksmanager:TaskManager2024%21@mysql:3306/adhd_tasks_dev
   #   depends_on:
   #     mysql:
   #       condition: service_healthy
