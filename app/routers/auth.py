@@ -17,6 +17,7 @@ from app.utils.auth import (
 )
 from app.utils.whitelist import is_email_whitelisted, get_whitelist_error_message
 from app.schemas.user import UserResponse, UserCreate
+from app.config.settings import settings
 from pydantic import BaseModel
 from typing import Optional
 import secrets
@@ -153,8 +154,8 @@ async def google_callback(
         # Create access token
         access_token = create_access_token(data={"sub": user.email, "user_id": user.id})
         
-        # Redirect to frontend with token
-        frontend_url = f"http://localhost:3000/auth/callback?token={access_token}&user_id={user.id}"
+        # Redirect to frontend with token - use environment-specific frontend URL
+        frontend_url = f"{settings.FRONTEND_URL}/auth/callback?token={access_token}&user_id={user.id}"
         
         return RedirectResponse(url=frontend_url, status_code=302)
         

@@ -10,14 +10,14 @@ class ProductionConfig(BaseConfig):
     # Format: mysql+pymysql://username:password@/database?unix_socket=/cloudsql/project:region:instance
     
     # Database connection settings
-    DB_HOST: str = ""  # Will be set via environment or Cloud SQL socket
-    DB_PORT: int = 3306
-    DB_NAME: str = "adhd_tasks_prod"
-    DB_USER: str = ""
-    DB_PASSWORD: str = ""
+    DB_HOST: str = os.getenv("DB_HOST", "")
+    DB_PORT: int = int(os.getenv("DB_PORT", "3306"))
+    DB_NAME: str = os.getenv("DB_NAME", "adhd_tasks_prod")
+    DB_USER: str = os.getenv("DB_USER", "")
+    DB_PASSWORD: str = os.getenv("DB_PASSWORD", "")
     
     # GCP Cloud SQL instance connection name (project:region:instance)
-    CLOUD_SQL_CONNECTION_NAME: str = ""
+    CLOUD_SQL_CONNECTION_NAME: str = os.getenv("CLOUD_SQL_CONNECTION_NAME", "")
     
     # Pool settings optimized for Cloud SQL
     DB_POOL_SIZE: int = 5
@@ -36,16 +36,14 @@ class ProductionConfig(BaseConfig):
             return f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
     
     # Production CORS - restrict to your domain
-    ALLOWED_ORIGINS: str = "https://your-app-domain.com"
+    # This will be overridden by the base class's os.getenv("ALLOWED_ORIGINS") call
     
     # Security settings - these should be set via environment variables
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "")
+    # These will be overridden by the base class's environment variable handling
     
     # Alpha Release Configuration - IMPORTANT: Update for production
     # Keep whitelist enabled for initial production deployment
-    ALPHA_WHITELIST_ENABLED: bool = True
-    # Override with environment variable in production
-    ALPHA_WHITELIST_EMAILS: str = os.getenv("ALPHA_WHITELIST_EMAILS", "leonelcs@gmail.com,beafurlan52@gmail.com")
+    # These will be overridden by the base class's environment variable handling
     
     class Config:
         env_file = ".env.production"

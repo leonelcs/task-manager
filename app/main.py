@@ -129,46 +129,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Timeout middleware disabled - causing issues with task creation
-# Will rely on uvicorn timeouts and SQLAlchemy connection timeouts instead
-# @app.middleware("http")
-# async def timeout_middleware(request: Request, call_next):
-#     """Add request timeout middleware to prevent hanging requests."""
-#     start_time = time.time()
-#     
-#     try:
-#         # Set timeout based on request type
-#         if request.method == "POST":
-#             timeout_seconds = 30  # Longer timeout for POST requests (task creation, etc.)
-#         elif request.method == "PUT":
-#             timeout_seconds = 20  # Medium timeout for updates
-#         else:
-#             timeout_seconds = 15  # Shorter timeout for GET requests
-#         
-#         logger.info(f"🕐 Request {request.method} {request.url.path} - timeout set to {timeout_seconds}s")
-#         
-#         # Execute the request with timeout
-#         response = await asyncio.wait_for(
-#             call_next(request), 
-#             timeout=timeout_seconds
-#         )
-#         
-#         process_time = time.time() - start_time
-#         logger.info(f"⏱️ Request {request.method} {request.url.path} completed in {process_time:.2f}s")
-#         
-#         return response
-#         
-#     except asyncio.TimeoutError:
-#         process_time = time.time() - start_time
-#         logger.error(f"⏰ Request {request.method} {request.url.path} timed out after {process_time:.2f}s")
-#         raise HTTPException(
-#             status_code=504, 
-#             detail=f"Request timed out after {timeout_seconds} seconds. Please try again or contact support if this persists."
-#         )
-#     except Exception as e:
-#         process_time = time.time() - start_time
-#         logger.error(f"❌ Request {request.method} {request.url.path} failed after {process_time:.2f}s: {str(e)}")
-#         raise
 
 # Simple request logging middleware
 @app.middleware("http")
