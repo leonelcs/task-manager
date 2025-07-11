@@ -8,7 +8,7 @@ from typing import Optional, List
 from datetime import datetime
 from app.database import get_db
 from app.models.project import Project, ProjectCollaboration
-from app.models.task import Task
+from app.models.task import Task, TaskStatus
 from app.models.user import User
 from app.models.group import SharedGroup, SharedGroupMembership
 from app.routers.auth import get_current_user
@@ -735,9 +735,9 @@ async def delete_project(
         ProjectCollaboration.project_id == project.id
     ).update({"is_active": False})
     
-    # Mark tasks as archived instead of deleting
+    # Mark tasks as paused instead of deleting
     db.query(Task).filter(Task.project_id == project.id).update({
-        "is_active": False,
+        "status": TaskStatus.PAUSED,
         "updated_at": datetime.utcnow()
     })
     
