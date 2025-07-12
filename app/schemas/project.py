@@ -110,6 +110,41 @@ class ProjectListResponse(BaseModel):
     created_at: datetime
     due_date: Optional[datetime]
     
+    # Additional fields for enhanced project listing
+    shared_group_id: Optional[str] = None
+    shared_group_name: Optional[str] = None
+    user_role_in_project: Optional[str] = None  # owner, collaborator, member
+    access_source: Optional[str] = None  # owned, shared_group, collaboration, public
+    
+    class Config:
+        from_attributes = True
+
+
+class EnhancedProjectListResponse(BaseModel):
+    """Enhanced schema for project list response with group and collaboration info."""
+    id: str
+    name: str
+    description: Optional[str]
+    project_type: ProjectType
+    status: ProjectStatus
+    owner_id: str
+    
+    # Group information (if applicable)
+    shared_group_id: Optional[str] = None
+    shared_group_name: Optional[str] = None
+    user_role_in_group: Optional[str] = None  # owner, admin, member, viewer
+    
+    # User's relationship to this project
+    user_role_in_project: str  # owner, collaborator, group_member
+    access_source: str  # owned, shared_group, collaboration, public
+    
+    # Project metrics
+    collaborator_count: int
+    task_count: int
+    completion_percentage: float
+    created_at: datetime
+    due_date: Optional[datetime]
+    
     class Config:
         from_attributes = True
 

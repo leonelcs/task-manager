@@ -13,128 +13,114 @@ from app.models.user import User
 from app.models.group import SharedGroup, SharedGroupMembership
 from app.routers.auth import get_current_user
 from app.schemas.project import (
-    ProjectCreate, ProjectUpdate, ProjectResponse, ProjectListResponse,
+    ProjectCreate, ProjectUpdate, ProjectResponse, ProjectListResponse, EnhancedProjectListResponse,
     ProjectInvitation, ProjectJoinRequest, ProjectType, ProjectStatus
 )
 
 router = APIRouter()
 
-@router.get("/", response_model=List[ProjectListResponse], summary="Get user's projects")
+@router.get("/", response_model=List[EnhancedProjectListResponse], summary="Get user's projects")
 async def get_projects(
     project_type: Optional[List[ProjectType]] = Query(None, description="Filter by project type(s). Can be a single type or list of types."),
     status: Optional[ProjectStatus] = Query(None, description="Filter by project status"),
-    limit: int = Query(20, ge=1, le=100, description="Number of projects to return"),
+    limit: int = Query(100, ge=1, le=200, description="Number of projects to return"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Get user's projects with ADHD-friendly filtering and presentation.
+    Get user's projects based on comprehensive access rules:
     
-    **ADHD Features:**
-    - Limited results to prevent overwhelm
-    - Clear status-based organization
-    - Project type categorization for focus
-    - Progress indicators for motivation
+    1. All active projects from shared groups where user is a member
+    2. All active projects created by the user (owned)
+    3. All active public projects where the user participates (as collaborator)
     
-    **Project Types:**
-    - personal: Projects owned by the user
-    - shared: Projects from groups the user belongs to or collaborative projects
-    - public: Public projects the user has joined
+    This matches the query:
+    SELECT 
+        sgm.shared_group_id,
+        sg.name AS group_name,
+        COALESCE(u.full_name, u.email) AS user_name,
+        sgm.role,
+        p.name AS project_name,
+        p.project_type,
+        p.status AS project_status
+    FROM shared_group_memberships sgm
+    JOIN shared_groups sg ON sgm.shared_group_id = sg.id
+    JOIN users u ON sgm.user_id = u.id
+    LEFT JOIN projects p ON p.shared_group_id = sg.id AND p.is_active = TRUE
+    WHERE sgm.is_active = TRUE
+    ORDER BY sg.name, p.name, sgm.role, u.full_name;
     
-    **Default Behavior:**
-    - When no project_type is specified, returns only personal projects
-    - Use project_type=['personal','shared','public'] to get all projects
+    Plus user's own projects and public projects they collaborate on.
     """
-    # Default to personal projects only if no type specified
-    if project_type is None:
-        project_type = [ProjectType.PERSONAL]
     
-    # Ensure project_type is always a list
-    if not isinstance(project_type, list):
-        project_type = [project_type]
-    
-    # Build base queries for different project access types
-    project_queries = []
-    
-    # 1. Projects owned by the user
-    if ProjectType.PERSONAL in project_type or ProjectType.SHARED in project_type:
-        owned_query = db.query(Project).filter(Project.owner_id == current_user.id)
-        project_queries.append(owned_query)
-    
-    # 2. Projects where user is a direct collaborator
-    if ProjectType.SHARED in project_type or ProjectType.PUBLIC in project_type:
-        collaborated_projects = db.query(Project).join(ProjectCollaboration).filter(
-            ProjectCollaboration.user_id == current_user.id,
-            ProjectCollaboration.is_active == True
-        )
-        project_queries.append(collaborated_projects)
-    
-    # 3. Projects from groups where user is a member (for shared projects)
-    if ProjectType.SHARED in project_type:
-        # Get user's group memberships
-        user_groups = db.query(SharedGroupMembership.shared_group_id).filter(
-            SharedGroupMembership.user_id == current_user.id,
-            SharedGroupMembership.is_active == True
-        ).subquery()
-        
-        # Get projects associated with those groups
-        group_projects = db.query(Project).filter(
-            Project.shared_group_id.in_(user_groups)
-        )
-        project_queries.append(group_projects)
-    
-    # 4. Public projects that user has access to (only if they've joined them)
-    # Public projects are already covered by collaboration check above
-    
-    # Combine all queries
-    if not project_queries:
-        # Fallback to empty result if no valid project types
-        projects = []
-    else:
-        # Union all queries
-        combined_query = project_queries[0]
-        for query in project_queries[1:]:
-            combined_query = combined_query.union(query)
-        
-        # Apply project type filter to the combined results
-        combined_query = combined_query.filter(Project.project_type.in_(project_type))
-        
-        # Apply status filter if specified
-        if status:
-            combined_query = combined_query.filter(Project.status == status)
-        
-        # Apply additional filters for active projects
-        combined_query = combined_query.filter(Project.is_active == True)
-        
-        # Get projects with limit
-        projects = combined_query.limit(limit).all()
-    
-    # Convert to response format with computed fields
     project_responses = []
-    for project in projects:
-        # Count collaborators
+    
+    # Query 1: All active projects from shared groups where user is a member
+    # This replicates your main SQL query
+    shared_group_projects_query = db.query(
+        Project,
+        SharedGroup.name.label('group_name'),
+        SharedGroupMembership.role.label('user_group_role')
+    ).join(
+        SharedGroup, Project.shared_group_id == SharedGroup.id
+    ).join(
+        SharedGroupMembership, SharedGroupMembership.shared_group_id == SharedGroup.id
+    ).filter(
+        SharedGroupMembership.user_id == current_user.id,
+        SharedGroupMembership.is_active == True,
+        Project.is_active == True
+    )
+    
+    # Apply filters if specified
+    if status:
+        shared_group_projects_query = shared_group_projects_query.filter(Project.status == status)
+    if project_type:
+        if not isinstance(project_type, list):
+            project_type = [project_type]
+        shared_group_projects_query = shared_group_projects_query.filter(Project.project_type.in_(project_type))
+    
+    shared_group_projects = shared_group_projects_query.all()
+    
+    # Process shared group projects
+    for project, group_name, user_group_role in shared_group_projects:
+        # Calculate metrics for this project
         collaborator_count = db.query(ProjectCollaboration).filter(
             ProjectCollaboration.project_id == project.id,
             ProjectCollaboration.is_active == True
         ).count()
         
-        # Count tasks
         task_count = db.query(Task).filter(Task.project_id == project.id).count()
         
-        # Calculate completion percentage
         completed_tasks = db.query(Task).filter(
             Task.project_id == project.id,
-            Task.status == 'COMPLETED'
+            Task.status == "completed"
         ).count()
         completion_percentage = (completed_tasks / task_count * 100) if task_count > 0 else 0.0
         
-        project_responses.append(ProjectListResponse(
+        # Determine user's role in project
+        if project.owner_id == current_user.id:
+            user_role_in_project = "owner"
+        else:
+            # Check if user is a direct collaborator
+            collaboration = db.query(ProjectCollaboration).filter(
+                ProjectCollaboration.project_id == project.id,
+                ProjectCollaboration.user_id == current_user.id,
+                ProjectCollaboration.is_active == True
+            ).first()
+            user_role_in_project = collaboration.role if collaboration else "group_member"
+        
+        project_responses.append(EnhancedProjectListResponse(
             id=project.id,
             name=project.name,
             description=project.description,
             project_type=project.project_type,
             status=project.status,
             owner_id=project.owner_id,
+            shared_group_id=project.shared_group_id,
+            shared_group_name=group_name,
+            user_role_in_group=user_group_role,
+            user_role_in_project=user_role_in_project,
+            access_source="shared_group",
             collaborator_count=collaborator_count,
             task_count=task_count,
             completion_percentage=completion_percentage,
@@ -142,7 +128,166 @@ async def get_projects(
             due_date=project.due_date
         ))
     
-    return project_responses
+    # Query 2: All active projects created by the user (owned projects)
+    owned_projects_query = db.query(Project).filter(
+        Project.owner_id == current_user.id,
+        Project.is_active == True
+    )
+    
+    # Apply filters if specified
+    if status:
+        owned_projects_query = owned_projects_query.filter(Project.status == status)
+    if project_type:
+        owned_projects_query = owned_projects_query.filter(Project.project_type.in_(project_type))
+    
+    owned_projects = owned_projects_query.all()
+    
+    # Process owned projects (exclude those already added from shared groups)
+    existing_project_ids = {resp.id for resp in project_responses}
+    
+    for project in owned_projects:
+        if project.id in existing_project_ids:
+            continue  # Skip if already added from shared group
+            
+        # Calculate metrics for this project
+        collaborator_count = db.query(ProjectCollaboration).filter(
+            ProjectCollaboration.project_id == project.id,
+            ProjectCollaboration.is_active == True
+        ).count()
+        
+        task_count = db.query(Task).filter(Task.project_id == project.id).count()
+        
+        completed_tasks = db.query(Task).filter(
+            Task.project_id == project.id,
+            Task.status == "completed"
+        ).count()
+        completion_percentage = (completed_tasks / task_count * 100) if task_count > 0 else 0.0
+        
+        # Get group info if project belongs to a group
+        group_name = None
+        user_role_in_group = None
+        if project.shared_group_id:
+            group_info = db.query(
+                SharedGroup.name,
+                SharedGroupMembership.role
+            ).join(
+                SharedGroupMembership, SharedGroupMembership.shared_group_id == SharedGroup.id
+            ).filter(
+                SharedGroup.id == project.shared_group_id,
+                SharedGroupMembership.user_id == current_user.id,
+                SharedGroupMembership.is_active == True
+            ).first()
+            if group_info:
+                group_name, user_role_in_group = group_info
+        
+        project_responses.append(EnhancedProjectListResponse(
+            id=project.id,
+            name=project.name,
+            description=project.description,
+            project_type=project.project_type,
+            status=project.status,
+            owner_id=project.owner_id,
+            shared_group_id=project.shared_group_id,
+            shared_group_name=group_name,
+            user_role_in_group=user_role_in_group,
+            user_role_in_project="owner",
+            access_source="owned",
+            collaborator_count=collaborator_count,
+            task_count=task_count,
+            completion_percentage=completion_percentage,
+            created_at=project.created_at,
+            due_date=project.due_date
+        ))
+    
+    # Query 3: All active public projects where the user participates (as direct collaborator)
+    public_collaboration_projects_query = db.query(
+        Project,
+        ProjectCollaboration.role.label('collaboration_role')
+    ).join(
+        ProjectCollaboration, ProjectCollaboration.project_id == Project.id
+    ).filter(
+        ProjectCollaboration.user_id == current_user.id,
+        ProjectCollaboration.is_active == True,
+        Project.is_active == True,
+        Project.project_type == ProjectType.PUBLIC
+    )
+    
+    # Apply filters if specified
+    if status:
+        public_collaboration_projects_query = public_collaboration_projects_query.filter(Project.status == status)
+    if project_type and ProjectType.PUBLIC not in project_type:
+        # Skip public projects if not requested
+        public_collaboration_projects = []
+    else:
+        public_collaboration_projects = public_collaboration_projects_query.all()
+    
+    # Process public collaboration projects (exclude those already added)
+    existing_project_ids = {resp.id for resp in project_responses}
+    
+    for project, collaboration_role in public_collaboration_projects:
+        if project.id in existing_project_ids:
+            continue  # Skip if already added
+            
+        # Calculate metrics for this project
+        collaborator_count = db.query(ProjectCollaboration).filter(
+            ProjectCollaboration.project_id == project.id,
+            ProjectCollaboration.is_active == True
+        ).count()
+        
+        task_count = db.query(Task).filter(Task.project_id == project.id).count()
+        
+        completed_tasks = db.query(Task).filter(
+            Task.project_id == project.id,
+            Task.status == "completed"
+        ).count()
+        completion_percentage = (completed_tasks / task_count * 100) if task_count > 0 else 0.0
+        
+        # Get group info if project belongs to a group
+        group_name = None
+        user_role_in_group = None
+        if project.shared_group_id:
+            group_info = db.query(
+                SharedGroup.name,
+                SharedGroupMembership.role
+            ).join(
+                SharedGroupMembership, SharedGroupMembership.shared_group_id == SharedGroup.id
+            ).filter(
+                SharedGroup.id == project.shared_group_id,
+                SharedGroupMembership.user_id == current_user.id,
+                SharedGroupMembership.is_active == True
+            ).first()
+            if group_info:
+                group_name, user_role_in_group = group_info
+        
+        project_responses.append(EnhancedProjectListResponse(
+            id=project.id,
+            name=project.name,
+            description=project.description,
+            project_type=project.project_type,
+            status=project.status,
+            owner_id=project.owner_id,
+            shared_group_id=project.shared_group_id,
+            shared_group_name=group_name,
+            user_role_in_group=user_role_in_group,
+            user_role_in_project=collaboration_role,
+            access_source="public_collaboration",
+            collaborator_count=collaborator_count,
+            task_count=task_count,
+            completion_percentage=completion_percentage,
+            created_at=project.created_at,
+            due_date=project.due_date
+        ))
+    
+    # Sort by group name, project name, and role (similar to your SQL ORDER BY)
+    project_responses.sort(key=lambda x: (
+        x.shared_group_name or "",
+        x.name,
+        x.user_role_in_project,
+        x.access_source
+    ))
+    
+    # Apply limit
+    return project_responses[:limit]
 
 @router.post("/", response_model=ProjectResponse, summary="Create a new project")
 async def create_project(
@@ -273,7 +418,7 @@ async def get_project(
     
     completed_tasks = db.query(Task).filter(
         Task.project_id == project.id,
-        Task.status == 'COMPLETED'
+        Task.status == 'completed'
     ).count()
     completion_percentage = (completed_tasks / task_count * 100) if task_count > 0 else 0.0
     
@@ -391,7 +536,7 @@ async def update_project(
     
     completed_tasks = db.query(Task).filter(
         Task.project_id == project.id,
-        Task.status == 'COMPLETED'
+        Task.status == 'completed'
     ).count()
     completion_percentage = (completed_tasks / task_count * 100) if task_count > 0 else 0.0
     
@@ -666,7 +811,7 @@ async def discover_public_projects(
         
         completed_tasks = db.query(Task).filter(
             Task.project_id == project.id,
-            Task.status == 'COMPLETED'
+            Task.status == 'completed'
         ).count()
         completion_percentage = (completed_tasks / task_count * 100) if task_count > 0 else 0.0
         
