@@ -1,23 +1,58 @@
-# ADHD Task Manager API
+# ADHD Task Manager - Backend API
 
-A FastAPI-based backend for a task management system specifically designed to support people with ADHD in maintaining their periodic tasks and routines.
+FastAPI backend for the ADHD Task Manager application.
 
-## Features
+## Quick Start
 
-- 🧠 **ADHD-Focused Design**: Built with ADHD-specific challenges in mind
-- 🔐 **Google OAuth Authentication**: Secure login with Google accounts
-- 🤖 **Agentic Behavior**: AI-powered task suggestions based on historical data
-- 📊 **Historical Analysis**: Smart insights from past task completion patterns
-- ⚡ **FastAPI**: High-performance, modern Python web framework
-- 🔄 **Periodic Tasks**: Support for recurring tasks and routines
-- 👥 **Collaborative Features**: Group support and project collaboration
-- 📈 **Progress Tracking**: Monitor task completion and habit formation
+```bash
+# Setup environment
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+pip install -r requirements.txt
 
-## Project Structure
+# Configure environment
+cp .env.example .env
+# Edit .env with your database and OAuth settings
 
+# Run migrations
+alembic upgrade head
+
+# Start development server
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-task-manager-api/
-├── app/
+
+## API Documentation
+- Interactive docs: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+## Environment Variables
+```bash
+DATABASE_URL=mysql+aiomysql://user:pass@localhost:3306/adhd_tasks_dev
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+JWT_SECRET=your_jwt_secret
+FRONTEND_URL=http://localhost:3000
+ALLOWED_ORIGINS=http://localhost:3000
+```
+
+## Database Operations
+```bash
+# Create migration
+alembic revision --autogenerate -m "description"
+
+# Apply migrations
+alembic upgrade head
+
+# Rollback migration
+alembic downgrade -1
+```
+
+## Testing
+```bash
+pytest -v
+```
+
+For complete documentation, see the [docs-site](../docs-site/).
 │   ├── __init__.py
 │   ├── main.py              # FastAPI application entry point
 │   ├── database.py          # Database configuration
