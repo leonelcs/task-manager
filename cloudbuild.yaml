@@ -75,7 +75,7 @@ steps:
           --concurrency=1000
         
         echo "✅ Backend deployed to production"
-        echo "🌐 URL: https://adhd-task-manager-api-project-leonel.europe-west4.run.app"
+        echo "🌐 URL: https://adhd-task-manager-api-371157983914.europe-west4.run.app"
     waitFor: ['push-backend']
 
   # Send notification
@@ -87,7 +87,7 @@ steps:
       - |
         echo "✅ Backend build and deployment completed!"
         echo "🚀 Image: europe-west4-docker.pkg.dev/project-leonel/adhd-task-manager/adhd-task-manager-api:$SHORT_SHA"
-        echo "🌐 Production URL: https://adhd-task-manager-api-project-leonel.europe-west4.run.app"
+        echo "🌐 Production URL: https://adhd-task-manager-api-371157983914.europe-west4.run.app"
         echo "📊 View logs: https://console.cloud.google.com/run/detail/europe-west4/adhd-task-manager-api"
     waitFor: ['deploy-production']
 
