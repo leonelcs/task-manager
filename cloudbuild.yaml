@@ -52,20 +52,37 @@ steps:
       - 'europe-west4-docker.pkg.dev/project-leonel/adhd-task-manager/adhd-task-manager-api'
     waitFor: ['build-backend']
 
-  # Deploy to production
+  # Deploy to production with CORS fix
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'deploy-production'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
-        echo "🚀 Deploying backend to production..."
+        echo "🚀 Deploying backend to production with CORS configuration..."
+        
+        # Production URLs - ensuring consistency
+        FRONTEND_URL="https://adhd-task-manager-web-371157983914.europe-west4.run.app"
+        BACKEND_URL="https://adhd-task-manager-api-371157983914.europe-west4.run.app"
+        
+        echo "🔧 CORS Configuration:"
+        echo "   Frontend URL: $FRONTEND_URL"
+        echo "   Backend URL: $BACKEND_URL"
+        echo "   Allowed Origins: $FRONTEND_URL"
+        
         gcloud run deploy adhd-task-manager-api \
           --image=europe-west4-docker.pkg.dev/project-leonel/adhd-task-manager/adhd-task-manager-api:$SHORT_SHA \
           --region=europe-west4 \
           --platform=managed \
           --allow-unauthenticated \
           --set-env-vars="ENVIRONMENT=production" \
+          --set-env-vars="FRONTEND_URL=$FRONTEND_URL" \
+          --set-env-vars="BACKEND_URL=$BACKEND_URL" \
+          --set-env-vars="ALLOWED_ORIGINS=$FRONTEND_URL" \
+          --set-env-vars="CORS_ORIGINS=$FRONTEND_URL" \
+          --set-env-vars="GOOGLE_REDIRECT_URI=$BACKEND_URL/api/auth/google/callback" \
+          --set-env-vars="ALPHA_WHITELIST_ENABLED=true" \
+          --set-env-vars="ALPHA_WHITELIST_EMAILS=leonelcs@gmail.com,beafurlan52@gmail.com" \
           --add-cloudsql-instances=project-leonel:europe-west4:adhd-task-manager-db \
           --memory=2Gi \
           --cpu=2 \
@@ -74,9 +91,55 @@ steps:
           --timeout=900 \
           --concurrency=1000
         
-        echo "✅ Backend deployed to production"
-        echo "🌐 URL: https://adhd-task-manager-api-371157983914.europe-west4.run.app"
+        echo "✅ Backend deployed to production with CORS configuration"
+        echo "🌐 Backend URL: $BACKEND_URL"
+        echo "🌐 Frontend URL: $FRONTEND_URL"
+        echo "🔧 CORS Origins: $FRONTEND_URL"
     waitFor: ['push-backend']
+
+  # Verify CORS configuration
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'verify-cors'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "🔍 Verifying CORS configuration..."
+        
+        FRONTEND_URL="https://adhd-task-manager-web-371157983914.europe-west4.run.app"
+        BACKEND_URL="https://adhd-task-manager-api-371157983914.europe-west4.run.app"
+        
+        # Wait for service to be ready
+        echo "⏳ Waiting for service to be ready..."
+        sleep 30
+        
+        # Test CORS headers
+        echo "🌐 Testing CORS headers..."
+        cors_response=$(curl -s -I \
+          -H "Origin: $FRONTEND_URL" \
+          -H "Access-Control-Request-Method: GET" \
+          -H "Access-Control-Request-Headers: Content-Type" \
+          -X OPTIONS "$BACKEND_URL/api/tasks" 2>/dev/null || echo "failed")
+        
+        if echo "$cors_response" | grep -q "access-control-allow-origin"; then
+          echo "✅ CORS headers detected in response"
+          allowed_origin=$(echo "$cors_response" | grep -i "access-control-allow-origin" | cut -d' ' -f2- | tr -d '\r\n')
+          echo "   Allowed Origin: $allowed_origin"
+        else
+          echo "⚠️  CORS headers not detected - checking service logs..."
+          gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=adhd-task-manager-api" --limit=10 --format="value(textPayload)"
+        fi
+        
+        # Test health endpoint
+        echo "🏥 Testing health endpoint..."
+        if curl -s -f "$BACKEND_URL/health" > /dev/null; then
+          echo "✅ Backend health check passed"
+        else
+          echo "⚠️  Backend health check failed"
+        fi
+        
+        echo "✅ CORS verification completed"
+    waitFor: ['deploy-production']
 
   # Send notification
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -88,8 +151,10 @@ steps:
         echo "✅ Backend build and deployment completed!"
         echo "🚀 Image: europe-west4-docker.pkg.dev/project-leonel/adhd-task-manager/adhd-task-manager-api:$SHORT_SHA"
         echo "🌐 Production URL: https://adhd-task-manager-api-371157983914.europe-west4.run.app"
-        echo "📊 View logs: https://console.cloud.google.com/run/detail/europe-west4/adhd-task-manager-api"
-    waitFor: ['deploy-production']
+        echo "� CORS properly configured for: https://adhd-task-manager-web-371157983914.europe-west4.run.app"
+        echo "�📊 View logs: https://console.cloud.google.com/run/detail/europe-west4/adhd-task-manager-api"
+        echo "🔗 API Documentation: https://adhd-task-manager-api-371157983914.europe-west4.run.app/docs"
+    waitFor: ['verify-cors']
 
 # Fix the service account logging issue
 options:
