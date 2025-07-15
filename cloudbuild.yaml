@@ -61,9 +61,9 @@ steps:
       - |
         echo "🚀 Deploying backend to production with CORS configuration..."
         
-        # Production URLs - ensuring consistency
-        FRONTEND_URL="https://adhd-task-manager-web-371157983914.europe-west4.run.app"
-        BACKEND_URL="https://adhd-task-manager-api-371157983914.europe-west4.run.app"
+        # Production URLs - from substitutions
+        FRONTEND_URL="${_FRONTEND_URL}"
+        BACKEND_URL="${_BACKEND_URL}"
         
         echo "🔧 CORS Configuration:"
         echo "   Frontend URL: $FRONTEND_URL"
@@ -106,8 +106,8 @@ steps:
       - |
         echo "🔍 Verifying CORS configuration..."
         
-        FRONTEND_URL="https://adhd-task-manager-web-371157983914.europe-west4.run.app"
-        BACKEND_URL="https://adhd-task-manager-api-371157983914.europe-west4.run.app"
+        FRONTEND_URL="${_FRONTEND_URL}"
+        BACKEND_URL="${_BACKEND_URL}"
         
         # Wait for service to be ready
         echo "⏳ Waiting for service to be ready..."
@@ -163,3 +163,8 @@ options:
   substitutionOption: ALLOW_LOOSE
 
 timeout: '1200s'
+
+# Define substitutions to avoid conflicts
+substitutions:
+  _FRONTEND_URL: 'https://adhd-task-manager-web-371157983914.europe-west4.run.app'
+  _BACKEND_URL: 'https://adhd-task-manager-api-371157983914.europe-west4.run.app'
