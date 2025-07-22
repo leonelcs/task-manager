@@ -35,29 +35,37 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+class MobileAuthRequest(BaseModel):
+    id_token: str
+    origin: str = "ios"
+
 @router.get("/google/login")
-async def google_login(request: Request):
+async def google_login(request: Request, origin: str = "web"):
     """
     Initiate Google OAuth login.
     Redirects to Google's OAuth consent screen.
+    
+    Args:
+        origin: The origin of the request ("web" or "ios"). Defaults to "web".
     """
     import logging
     logger = logging.getLogger(__name__)
     
-    logger.info(f"🔐 Starting Google OAuth login from {request.client.host if request.client else 'unknown'}")
+    logger.info(f"🔐 Starting Google OAuth login from {request.client.host if request.client else 'unknown'} with origin: {origin}")
     logger.info(f"🔐 Redirect URI configured: {google_oauth_service.redirect_uri}")
     
     try:
         # Generate state parameter for security
         state = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
         
-        auth_url = google_oauth_service.get_auth_url(state=state)
-        logger.info(f"🔐 Generated auth URL: {auth_url}")
+        auth_url = google_oauth_service.get_auth_url(state=state, origin=origin)
+        logger.info(f"🔐 Generated auth URL for {origin}: {auth_url}")
         
         return {
             "auth_url": auth_url,
             "message": "Visit the auth_url to complete Google OAuth login",
-            "state": state
+            "state": state,
+            "origin": origin
         }
     except HTTPException as e:
         # Re-raise HTTPException as-is
@@ -163,6 +171,79 @@ async def google_callback(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Authentication failed: {str(e)}"
+        )
+
+@router.post("/mobile/google", response_model=TokenResponse)
+async def mobile_google_login(auth_data: MobileAuthRequest, db: Session = Depends(get_db)):
+    """
+    Mobile Google OAuth login using ID token.
+    For iOS/Android apps that use Google Sign-In SDK.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"🔐 Mobile Google OAuth login with origin: {auth_data.origin}")
+    
+    try:
+        # Verify the ID token
+        google_user_info = google_oauth_service.verify_id_token(auth_data.id_token, auth_data.origin)
+        
+        # Check if email is whitelisted for alpha release
+        if not is_email_whitelisted(google_user_info['email']):
+            logger.warning(f"🚫 Access denied for non-whitelisted email: {google_user_info['email']}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=get_whitelist_error_message()
+            )
+        
+        logger.info(f"✅ Email {google_user_info['email']} passed whitelist check")
+        
+        # Check if user already exists
+        existing_user = get_user_by_google_id(db, google_user_info['sub'])  # 'sub' is the user ID in ID token
+        
+        if not existing_user:
+            # Check if user exists with same email but different provider
+            existing_email_user = get_user_by_email(db, google_user_info['email'])
+            if existing_email_user:
+                # Link Google account to existing user
+                existing_email_user.google_id = google_user_info['sub']
+                existing_email_user.profile_picture_url = google_user_info.get('picture', '')
+                if not existing_email_user.full_name:
+                    existing_email_user.full_name = google_user_info.get('name', '')
+                db.commit()
+                db.refresh(existing_email_user)
+                user = existing_email_user
+            else:
+                # Create new user from ID token data
+                user_data = {
+                    'id': google_user_info['sub'],
+                    'email': google_user_info['email'],
+                    'name': google_user_info.get('name', ''),
+                    'picture': google_user_info.get('picture', '')
+                }
+                user = create_user_from_google(db, user_data)
+        else:
+            # User exists, update their info
+            existing_user.profile_picture_url = google_user_info.get('picture', '')
+            existing_user.full_name = google_user_info.get('name', existing_user.full_name)
+            db.commit()
+            db.refresh(existing_user)
+            user = existing_user
+        
+        # Create access token
+        access_token = create_access_token(data={"sub": user.email, "user_id": user.id})
+        
+        return TokenResponse(
+            access_token=access_token,
+            token_type="bearer",
+            user=UserResponse.from_orm(user)
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Mobile authentication failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Mobile authentication failed: {str(e)}"
         )
 
 @router.post("/login", response_model=TokenResponse)

@@ -20,6 +20,10 @@ class GoogleOAuthService:
         self.client_secret = settings.GOOGLE_CLIENT_SECRET
         self.redirect_uri = settings.GOOGLE_REDIRECT_URI
         
+        # iOS OAuth settings
+        self.ios_client_id = settings.GOOGLE_IOS_CLIENT_ID
+        self.ios_bundle_id = settings.GOOGLE_IOS_BUNDLE_ID
+        
         # OAuth 2.0 scopes for Google
         self.scopes = [
             'openid',
@@ -32,16 +36,24 @@ class GoogleOAuthService:
         self.google_token_url = "https://oauth2.googleapis.com/token"
         self.google_userinfo_url = "https://www.googleapis.com/oauth2/v2/userinfo"
     
-    def get_auth_url(self, state: str = None) -> str:
+    def get_client_id(self, origin: str = "web") -> str:
+        """Get the appropriate client ID based on origin."""
+        if origin == "ios" and self.ios_client_id:
+            return self.ios_client_id
+        return self.client_id
+    
+    def get_auth_url(self, state: str = None, origin: str = "web") -> str:
         """Generate Google OAuth authorization URL."""
-        if not self.client_id or self.client_id == "your-google-client-id.apps.googleusercontent.com":
+        client_id = self.get_client_id(origin)
+        
+        if not client_id or client_id == "your-google-client-id.apps.googleusercontent.com":
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Google OAuth not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your .env file"
             )
         
         params = {
-            'client_id': self.client_id,
+            'client_id': client_id,
             'redirect_uri': self.redirect_uri,
             'scope': ' '.join(self.scopes),
             'response_type': 'code',
@@ -108,14 +120,16 @@ class GoogleOAuthService:
             
             return user_info
     
-    def verify_id_token(self, id_token_str: str) -> Dict[str, Any]:
+    def verify_id_token(self, id_token_str: str, origin: str = "web") -> Dict[str, Any]:
         """Verify Google ID token."""
         try:
+            client_id = self.get_client_id(origin)
+            
             # Verify the token
             idinfo = id_token.verify_oauth2_token(
                 id_token_str, 
                 requests.Request(), 
-                self.client_id
+                client_id
             )
             
             # Verify the issuer
